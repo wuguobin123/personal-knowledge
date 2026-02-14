@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.prod}"
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
 COMPOSE_FILE="$ROOT_DIR/docker-compose.prod.yml"
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -12,7 +12,7 @@ fi
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "[ERROR] 未找到 $ENV_FILE" >&2
-  echo "请先执行: cp .env.prod.example .env.prod 并填入生产参数。" >&2
+  echo "请先执行: cp .env.example .env 并填入参数，或通过 ENV_FILE 指定环境文件。" >&2
   exit 1
 fi
 

@@ -1,0 +1,65 @@
+[00:00:06.986] Server  LOG     ✓ Ready in 4.6s
+[01:02:15.688] Server  ERROR   ⨯ Error: ENOENT: no such file or directory, open '/Users/wuxiaomu/one-person/personal-knowledge/.next/dev/server/app/page/build-manifest.json'
+[01:02:15.700] Server  ERROR   ⨯ TurbopackInternalError: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+
+Debug info:
+- Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+  
+  Caused by:
+      0: Looking up data for TaskId 72078 from database failed
+      1: Unable to open static sorted file referenced from 00000257.meta
+      2: Unable to open static sorted file 00000256.sst
+      3: No such file or directory (os error 2)
+[01:02:15.770] Server  ERROR   Error: ENOENT: no such file or directory, open '/Users/wuxiaomu/one-person/personal-knowledge/.next/dev/server/app/page/build-manifest.json'
+[01:02:15.781] Server  ERROR   ⨯ TurbopackInternalError: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+
+Debug info:
+- Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+  
+  Caused by:
+      0: Looking up data for TaskId 72078 from database failed
+      1: Unable to open static sorted file referenced from 00000257.meta
+      2: Unable to open static sorted file 00000256.sst
+      3: No such file or directory (os error 2)
+[01:02:15.788] Server  ERROR   TurbopackInternalError: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+
+Debug info:
+- Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+  
+  Caused by:
+      0: Looking up data for TaskId 72078 from database failed
+      1: Unable to open static sorted file referenced from 00000257.meta
+      2: Unable to open static sorted file 00000256.sst
+      3: No such file or directory (os error 2)
+[01:03:24.479] Server  ERROR   ⨯ Error: ENOENT: no such file or directory, open '/Users/wuxiaomu/one-person/personal-knowledge/.next/dev/server/app/api/articles/[__metadata_id__]/route/app-paths-manifest.json'
+[01:03:24.493] Server  ERROR   ⨯ TurbopackInternalError: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+
+Debug info:
+- Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+  
+  Caused by:
+      0: Looking up data for TaskId 72078 from database failed
+      1: Unable to open static sorted file referenced from 00000257.meta
+      2: Unable to open static sorted file 00000256.sst
+      3: No such file or directory (os error 2)
+[01:03:24.544] Server  ERROR   Error: ENOENT: no such file or directory, open '/Users/wuxiaomu/one-person/personal-knowledge/.next/dev/server/app/api/articles/[__metadata_id__]/route/app-paths-manifest.json'
+[01:03:24.551] Server  ERROR   ⨯ TurbopackInternalError: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+
+Debug info:
+- Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+  
+  Caused by:
+      0: Looking up data for TaskId 72078 from database failed
+      1: Unable to open static sorted file referenced from 00000257.meta
+      2: Unable to open static sorted file 00000256.sst
+      3: No such file or directory (os error 2)
+[01:03:24.559] Server  ERROR   TurbopackInternalError: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+
+Debug info:
+- Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 72078))
+  
+  Caused by:
+      0: Looking up data for TaskId 72078 from database failed
+      1: Unable to open static sorted file referenced from 00000257.meta
+      2: Unable to open static sorted file 00000256.sst
+      3: No such file or directory (os error 2)

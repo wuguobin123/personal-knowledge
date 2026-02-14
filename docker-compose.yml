@@ -1,0 +1,43 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: blog-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: blog_db
+      MYSQL_USER: blog_user
+      MYSQL_PASSWORD: blog_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: blog-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: mysql://blog_user:blog_password@mysql:3306/blog_db
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+      AUTH_SECRET: change-this-long-random-secret
+      STORAGE_PROVIDER: local
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/public/uploads
+
+volumes:
+  mysql_data:
+  uploads_data:

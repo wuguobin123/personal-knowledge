@@ -43,46 +43,111 @@ npm run dev
 - 登录页：`http://localhost:3000/admin/login`
 - 管理页：`http://localhost:3000/admin`
 
-## 2. Docker 一键部署（推荐阿里云）
+## 2. 生产一键部署（可直接上线）
 
-在服务器项目目录执行：
+### 第一次部署
+
+1. 准备环境变量：
 
 ```bash
-docker compose up -d --build
+cp .env.example .env
 ```
 
-启动后：
+2. 修改 `.env` 的生产参数（至少要改）：
 
-- 博客网站：`http://服务器IP:3000`
-- MySQL：`服务器IP:3306`
+- `ADMIN_PASSWORD`
+- `AUTH_SECRET`
+- `MYSQL_ROOT_PASSWORD`
+- `MYSQL_PASSWORD`
+
+3. 一键部署：
+
+```bash
+./scripts/deploy.sh
+```
+
+部署完成后访问：
+
+- `http://服务器IP`（默认 Nginx 映射 `80` 端口）
+
+如果需要在首次部署时写入种子数据：
+
+```bash
+./scripts/deploy.sh --seed
+```
+
+### 日常发布（代码更新后）
+
+```bash
+./scripts/deploy.sh
+```
+
+脚本会自动执行：
+
+1. 构建最新应用镜像
+2. 启动并等待 MySQL 健康
+3. 执行 `prisma migrate deploy`
+4. 启动应用并做健康检查
+
+### 常用运维命令
+
+查看服务状态：
+
+```bash
+docker compose --env-file .env ps
+```
+
+查看日志：
+
+```bash
+docker compose --env-file .env logs -f nginx app
+```
 
 停止服务：
 
 ```bash
-docker compose down
+docker compose --env-file .env down
 ```
 
-如果需要删除数据库数据卷：
+删除数据卷（危险操作）：
 
 ```bash
-docker compose down -v
+docker compose --env-file .env down -v
 ```
 
-### 本地 Docker 开发（支持热更新）
+## 3. 数据库迁移与迁站
 
-生产部署不受影响。仅在本地开发时使用 dev 覆盖文件：
+仅执行数据库结构迁移：
+
+```bash
+./scripts/migrate.sh
+```
+
+迁移并补一次种子数据：
+
+```bash
+./scripts/migrate.sh --seed
+```
+
+导出数据库（迁站前备份）：
+
+```bash
+./scripts/db-dump.sh
+```
+
+导入数据库（迁站后恢复）：
+
+```bash
+./scripts/db-restore.sh --input backups/mysql-YYYYmmdd-HHMMSS.sql.gz
+```
+
+## 4. 本地 Docker 开发（支持热更新）
+
+仅在本地开发时使用 dev 覆盖文件：
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
-
-热更新原理：
-
-- `app` 容器运行 `npm run dev`
-- 项目源码目录挂载到容器 `/app`
-- `.next` 使用独立数据卷（`app_next`），避免宿主机挂载导致的缓存损坏
-- `dev` 使用 `next dev --webpack`，提升容器场景稳定性
-- 保存代码后，Next.js 会自动重新编译并刷新
 
 查看日志：
 
@@ -96,15 +161,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f app
 docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
 
-## 3. 文章接口
-
-如果你是已有数据库，先执行下面任一方式升级表结构：
-
-```bash
-npm run db:push
-```
-
-或直接执行 `prisma/migrations/20260214135000_add_article_meta_fields/migration.sql`。
+## 5. 文章接口
 
 ### 读取文章列表
 
@@ -131,7 +188,7 @@ curl -X POST http://localhost:3000/api/articles \
   }'
 ```
 
-## 4. 后台管理发布
+## 6. 后台管理发布
 
 1. 打开 `http://localhost:3000/admin/login`。
 2. 输入 `ADMIN_USERNAME` / `ADMIN_PASSWORD`。
@@ -139,13 +196,13 @@ curl -X POST http://localhost:3000/api/articles \
 4. 可直接上传图片，系统会自动插入 Markdown 图片链接。
 5. 右侧实时预览无误后发布。
 
-## 5. 图片上传配置
+## 7. 图片上传配置
 
 默认使用本地存储：
 
 - 设置 `STORAGE_PROVIDER=local`
 - 图片会存储到 `public/uploads`
-- Docker 场景已在 `docker-compose.yml` 中挂载 `uploads_data` 数据卷持久化
+- Docker 场景已挂载 `uploads_data` 数据卷持久化
 
 使用阿里云 OSS：
 
@@ -153,8 +210,9 @@ curl -X POST http://localhost:3000/api/articles \
 - 必填：`OSS_REGION`、`OSS_BUCKET`、`OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET`
 - 可选：`OSS_PUBLIC_URL`（建议填 CDN/自定义域名）
 
-## 6. 阿里云上线建议
+## 8. 阿里云上线建议
 
-1. 在安全组放行 `3000`（Web）和按需放行 `3306`（MySQL，建议仅内网或白名单）。
-2. 修改 `docker-compose.yml` 里的默认数据库密码、后台账号密码、`AUTH_SECRET`。
-3. 使用 Nginx 反向代理到 `3000` 并配置 HTTPS（可接入 Let’s Encrypt）。
+1. 安全组至少放行 `80`（启用 HTTPS 时放行 `443`）。
+2. 不建议放行 `3306` 到公网；如必须开放，请限制白名单。
+3. 生产必须修改 `.env` 里的默认密码与 `AUTH_SECRET`。
+4. 可通过 `NGINX_PORT` 调整对外端口，默认是 `80`。

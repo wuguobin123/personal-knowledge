@@ -130,7 +130,7 @@ export async function POST(request: Request) {
       title,
       slug,
       category,
-      tags: tags.length > 0 ? tags : null,
+      tags: tags.length > 0 ? tags : Prisma.JsonNull,
       sourceType,
       sourceDetail,
       excerpt,

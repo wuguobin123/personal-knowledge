@@ -1,42 +1,93 @@
+x-app-env: &app-env
+  DATABASE_URL: mysql://${MYSQL_USER:-blog_user}:${MYSQL_PASSWORD:-blog_password}@${DB_HOST:-mysql}:${DB_PORT:-3306}/${MYSQL_DATABASE:-blog_db}
+  ADMIN_USERNAME: ${ADMIN_USERNAME:?ADMIN_USERNAME is required}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+  AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
+  STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+  OSS_REGION: ${OSS_REGION:-}
+  OSS_BUCKET: ${OSS_BUCKET:-}
+  OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
+  OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
+  OSS_PUBLIC_URL: ${OSS_PUBLIC_URL:-}
+  NEXT_TELEMETRY_DISABLED: "1"
+
 services:
   mysql:
     image: mysql:8.4
-    container_name: blog-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root_password
-      MYSQL_DATABASE: blog_db
-      MYSQL_USER: blog_user
-      MYSQL_PASSWORD: blog_password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-blog_db}
+      MYSQL_USER: ${MYSQL_USER:-blog_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-blog_password}
     ports:
-      - "3306:3306"
+      - "${MYSQL_BIND_ADDRESS:-127.0.0.1}:${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 12
+      start_period: 20s
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: blog-app
+    image: personal-knowledge-app:latest
     restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      DATABASE_URL: mysql://blog_user:blog_password@mysql:3306/blog_db
-      ADMIN_USERNAME: admin
-      ADMIN_PASSWORD: admin123
-      AUTH_SECRET: change-this-long-random-secret
-      STORAGE_PROVIDER: local
+    expose:
+      - "3000"
+    environment: *app-env
     depends_on:
       mysql:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     volumes:
       - uploads_data:/app/public/uploads
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./deploy/nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/nginx-health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  migrate:
+    image: personal-knowledge-app:latest
+    profiles: ["tools"]
+    restart: "no"
+    environment: *app-env
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["npm", "run", "db:migrate"]
+
+  seed:
+    image: personal-knowledge-app:latest
+    profiles: ["tools"]
+    restart: "no"
+    environment: *app-env
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["npm", "run", "db:seed"]
 
 volumes:
   mysql_data:

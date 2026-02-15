@@ -17,7 +17,14 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 echo "[INFO] 使用环境文件: $ENV_FILE"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build --remove-orphans
+if ! docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build --remove-orphans; then
+  echo "[ERROR] 部署失败。若日志包含 registry-1.docker.io 超时，可在环境文件中配置镜像地址:" >&2
+  echo "NODE_IMAGE=node:20-alpine" >&2
+  echo "MYSQL_IMAGE=mysql:8.4" >&2
+  echo "NGINX_IMAGE=nginx:1.27-alpine" >&2
+  echo "例如使用镜像站: docker.1ms.run/library/node:20-alpine" >&2
+  exit 1
+fi
 
 echo "[INFO] 当前服务状态"
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps

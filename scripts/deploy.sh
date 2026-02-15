@@ -74,6 +74,18 @@ require_cmd() {
   fi
 }
 
+print_registry_timeout_hint() {
+  cat >&2 <<'EOF'
+Image pull/build failed. If logs show timeout to registry-1.docker.io, set mirror images in your env file:
+  NODE_IMAGE=node:20-alpine
+  MYSQL_IMAGE=mysql:8.4
+  NGINX_IMAGE=nginx:1.27-alpine
+
+Example mirror:
+  NODE_IMAGE=docker.1ms.run/library/node:20-alpine
+EOF
+}
+
 load_env() {
   set -a
   # shellcheck disable=SC1090
@@ -161,11 +173,16 @@ main() {
   COMPOSE_CMD=(docker compose --env-file "$ENV_FILE")
 
   if [[ $SKIP_PULL -eq 0 ]]; then
-    "${COMPOSE_CMD[@]}" pull mysql >/dev/null || true
+    if ! "${COMPOSE_CMD[@]}" pull mysql >/dev/null; then
+      print_registry_timeout_hint
+    fi
   fi
 
   if [[ $SKIP_BUILD -eq 0 ]]; then
-    "${COMPOSE_CMD[@]}" build app
+    if ! "${COMPOSE_CMD[@]}" build app; then
+      print_registry_timeout_hint
+      exit 1
+    fi
   fi
 
   "${COMPOSE_CMD[@]}" up -d mysql

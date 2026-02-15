@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
     environment:
       NODE_ENV: development
       WATCHPACK_POLLING: "true"

@@ -22,7 +22,10 @@ if ! docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build --re
   echo "NODE_IMAGE=node:20-alpine" >&2
   echo "MYSQL_IMAGE=mysql:8.0" >&2
   echo "NGINX_IMAGE=nginx:1.21-alpine" >&2
-  echo "例如使用镜像站: docker.1ms.run/library/node:20-alpine" >&2
+  echo "例如（仅主机名，不带 https://）:" >&2
+  echo "NODE_IMAGE=him7zrbc.mirror.aliyuncs.com/library/node:20-alpine" >&2
+  echo "MYSQL_IMAGE=him7zrbc.mirror.aliyuncs.com/library/mysql:8.0" >&2
+  echo "NGINX_IMAGE=him7zrbc.mirror.aliyuncs.com/library/nginx:1.21-alpine" >&2
   exit 1
 fi
 

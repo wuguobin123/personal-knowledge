@@ -66,6 +66,14 @@ cp .env.example .env
 - `MYSQL_IMAGE`（默认 `mysql:8.0`）
 - `NGINX_IMAGE`（默认 `nginx:1.21-alpine`）
 
+阿里云镜像示例（仅主机名，不带 `https://`）：
+
+```bash
+NODE_IMAGE=him7zrbc.mirror.aliyuncs.com/library/node:20-alpine
+MYSQL_IMAGE=him7zrbc.mirror.aliyuncs.com/library/mysql:8.0
+NGINX_IMAGE=him7zrbc.mirror.aliyuncs.com/library/nginx:1.21-alpine
+```
+
 3. 一键部署：
 
 ```bash

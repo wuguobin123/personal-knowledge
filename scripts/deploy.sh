@@ -81,8 +81,10 @@ Image pull/build failed. If logs show timeout to registry-1.docker.io, set mirro
   MYSQL_IMAGE=mysql:8.0
   NGINX_IMAGE=nginx:1.21-alpine
 
-Example mirror:
-  NODE_IMAGE=docker.1ms.run/library/node:20-alpine
+Mirror example (host only, no https://):
+  NODE_IMAGE=him7zrbc.mirror.aliyuncs.com/library/node:20-alpine
+  MYSQL_IMAGE=him7zrbc.mirror.aliyuncs.com/library/mysql:8.0
+  NGINX_IMAGE=him7zrbc.mirror.aliyuncs.com/library/nginx:1.21-alpine
 EOF
 }
 

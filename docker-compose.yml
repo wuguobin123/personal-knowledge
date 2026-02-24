@@ -13,7 +13,7 @@ x-app-env: &app-env
 
 services:
   mysql:
-    image: ${MYSQL_IMAGE:-mysql:8.4}
+    image: ${MYSQL_IMAGE:-mysql:8.0}
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
@@ -55,7 +55,7 @@ services:
       - uploads_data:/app/public/uploads
 
   nginx:
-    image: ${NGINX_IMAGE:-nginx:1.27-alpine}
+    image: ${NGINX_IMAGE:-nginx:1.21-alpine}
     restart: unless-stopped
     depends_on:
       app:

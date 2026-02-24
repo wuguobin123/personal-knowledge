@@ -63,8 +63,8 @@ cp .env.example .env
 网络拉取 Docker Hub 不稳定时，可额外设置：
 
 - `NODE_IMAGE`（默认 `node:20-alpine`）
-- `MYSQL_IMAGE`（默认 `mysql:8.4`）
-- `NGINX_IMAGE`（默认 `nginx:1.27-alpine`）
+- `MYSQL_IMAGE`（默认 `mysql:8.0`）
+- `NGINX_IMAGE`（默认 `nginx:1.21-alpine`）
 
 3. 一键部署：
 

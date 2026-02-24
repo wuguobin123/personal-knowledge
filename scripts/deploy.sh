@@ -78,8 +78,8 @@ print_registry_timeout_hint() {
   cat >&2 <<'EOF'
 Image pull/build failed. If logs show timeout to registry-1.docker.io, set mirror images in your env file:
   NODE_IMAGE=node:20-alpine
-  MYSQL_IMAGE=mysql:8.4
-  NGINX_IMAGE=nginx:1.27-alpine
+  MYSQL_IMAGE=mysql:8.0
+  NGINX_IMAGE=nginx:1.21-alpine
 
 Example mirror:
   NODE_IMAGE=docker.1ms.run/library/node:20-alpine

@@ -1,6 +1,6 @@
 services:
   mysql:
-    image: ${MYSQL_IMAGE:-mysql:8.4}
+    image: ${MYSQL_IMAGE:-mysql:8.0}
     container_name: blog-mysql
     restart: unless-stopped
     environment:
@@ -69,7 +69,7 @@ services:
       start_period: 30s
 
   nginx:
-    image: ${NGINX_IMAGE:-nginx:1.27-alpine}
+    image: ${NGINX_IMAGE:-nginx:1.21-alpine}
     container_name: blog-nginx
     restart: unless-stopped
     depends_on:

@@ -81,10 +81,14 @@ Image pull/build failed. If logs show timeout to registry-1.docker.io, set mirro
   MYSQL_IMAGE=mysql:8.0
   NGINX_IMAGE=nginx:1.21-alpine
 
-Mirror example (host only, no https://):
-  NODE_IMAGE=him7zrbc.mirror.aliyuncs.com/library/node:20-alpine
-  MYSQL_IMAGE=him7zrbc.mirror.aliyuncs.com/library/mysql:8.0
-  NGINX_IMAGE=him7zrbc.mirror.aliyuncs.com/library/nginx:1.21-alpine
+Aliyun accelerator endpoint should be configured in Docker daemon mirror (NOT as image name):
+  /etc/docker/daemon.json:
+  {"registry-mirrors":["https://him7zrbc.mirror.aliyuncs.com"]}
+
+If you cannot change daemon config, use explicit mirror image names, e.g.:
+  NODE_IMAGE=docker.1ms.run/library/node:20-alpine
+  MYSQL_IMAGE=docker.1ms.run/library/mysql:8.0
+  NGINX_IMAGE=docker.1ms.run/library/nginx:1.21-alpine
 EOF
 }
 

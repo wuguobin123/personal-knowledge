@@ -66,12 +66,25 @@ cp .env.example .env
 - `MYSQL_IMAGE`（默认 `mysql:8.0`）
 - `NGINX_IMAGE`（默认 `nginx:1.21-alpine`）
 
-阿里云镜像示例（仅主机名，不带 `https://`）：
+阿里云加速地址 `https://him7zrbc.mirror.aliyuncs.com` 请配置为 Docker daemon mirror（不要直接写到 `NODE_IMAGE`）：
 
 ```bash
-NODE_IMAGE=him7zrbc.mirror.aliyuncs.com/library/node:20-alpine
-MYSQL_IMAGE=him7zrbc.mirror.aliyuncs.com/library/mysql:8.0
-NGINX_IMAGE=him7zrbc.mirror.aliyuncs.com/library/nginx:1.21-alpine
+sudo mkdir -p /etc/docker
+cat >/etc/docker/daemon.json <<'EOF'
+{
+  "registry-mirrors": ["https://him7zrbc.mirror.aliyuncs.com"]
+}
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+如果不能修改 Docker daemon，再使用可直接拉取的镜像站前缀（示例）：
+
+```bash
+NODE_IMAGE=docker.1ms.run/library/node:20-alpine
+MYSQL_IMAGE=docker.1ms.run/library/mysql:8.0
+NGINX_IMAGE=docker.1ms.run/library/nginx:1.21-alpine
 ```
 
 3. 一键部署：

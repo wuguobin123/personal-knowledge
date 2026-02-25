@@ -22,10 +22,12 @@ if ! docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build --re
   echo "NODE_IMAGE=node:20-alpine" >&2
   echo "MYSQL_IMAGE=mysql:8.0" >&2
   echo "NGINX_IMAGE=nginx:1.21-alpine" >&2
-  echo "例如（仅主机名，不带 https://）:" >&2
-  echo "NODE_IMAGE=him7zrbc.mirror.aliyuncs.com/library/node:20-alpine" >&2
-  echo "MYSQL_IMAGE=him7zrbc.mirror.aliyuncs.com/library/mysql:8.0" >&2
-  echo "NGINX_IMAGE=him7zrbc.mirror.aliyuncs.com/library/nginx:1.21-alpine" >&2
+  echo "阿里云加速地址需配置在 Docker daemon（不能直接写成 NODE_IMAGE）:" >&2
+  echo "/etc/docker/daemon.json => {\"registry-mirrors\":[\"https://him7zrbc.mirror.aliyuncs.com\"]}" >&2
+  echo "若无法修改 daemon，可改用镜像站完整镜像名，例如:" >&2
+  echo "NODE_IMAGE=docker.1ms.run/library/node:20-alpine" >&2
+  echo "MYSQL_IMAGE=docker.1ms.run/library/mysql:8.0" >&2
+  echo "NGINX_IMAGE=docker.1ms.run/library/nginx:1.21-alpine" >&2
   exit 1
 fi
 

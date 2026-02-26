@@ -22,6 +22,12 @@
 cp .env.example .env
 ```
 
+如果本地开发希望直接连接远程 MySQL（不依赖本地 Docker），可在 `.env.local` 中设置：
+
+```bash
+DATABASE_URL="mysql://blog_user:blog_password@47.94.76.216:3306/blog_db"
+```
+
 3. 安装依赖并初始化数据库：
 
 ```bash

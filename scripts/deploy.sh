@@ -98,9 +98,51 @@ If build logs contain "npm error signal SIGKILL" during "next build", it's usual
 Try these:
   1) Increase server memory or add swap.
   2) Lower NODE_MAX_OLD_SPACE_SIZE in env file, e.g.:
-       NODE_MAX_OLD_SPACE_SIZE=768
+       NODE_MAX_OLD_SPACE_SIZE=512
   3) If logs show "JavaScript heap out of memory", increase it to 1024 or 1536.
 EOF
+}
+
+is_next_build_sigkill() {
+  local log_file="$1"
+  grep -Eq 'npm error signal SIGKILL|signal SIGKILL' "$log_file" \
+    && grep -Eq 'next build|npm run build' "$log_file"
+}
+
+build_app_with_oom_retry() {
+  local build_log
+  build_log="$(mktemp)"
+  local current_heap="${NODE_MAX_OLD_SPACE_SIZE:-768}"
+  local build_exit=0
+
+  if ! "${COMPOSE_CMD[@]}" build app 2>&1 | tee "$build_log"; then
+    build_exit=1
+  fi
+
+  if [[ $build_exit -eq 0 ]]; then
+    rm -f "$build_log"
+    return 0
+  fi
+
+  if is_next_build_sigkill "$build_log"; then
+    if ! [[ "$current_heap" =~ ^[0-9]+$ ]]; then
+      current_heap=768
+    fi
+
+    for retry_heap in 512 384 256; do
+      if (( retry_heap < current_heap )); then
+        echo "Detected OOM-like SIGKILL during build, retrying with NODE_MAX_OLD_SPACE_SIZE=$retry_heap ..." >&2
+        if NODE_MAX_OLD_SPACE_SIZE="$retry_heap" "${COMPOSE_CMD[@]}" build app; then
+          echo "Build succeeded with NODE_MAX_OLD_SPACE_SIZE=$retry_heap. Persist it in your env file." >&2
+          rm -f "$build_log"
+          return 0
+        fi
+      fi
+    done
+  fi
+
+  rm -f "$build_log"
+  return 1
 }
 
 load_env() {
@@ -196,7 +238,7 @@ main() {
   fi
 
   if [[ $SKIP_BUILD -eq 0 ]]; then
-    if ! "${COMPOSE_CMD[@]}" build app; then
+    if ! build_app_with_oom_retry; then
       print_registry_timeout_hint
       print_build_oom_hint
       exit 1

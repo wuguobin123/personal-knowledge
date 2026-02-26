@@ -60,6 +60,10 @@ cp .env.example .env
 - `MYSQL_ROOT_PASSWORD`
 - `MYSQL_PASSWORD`
 
+如果你的生产环境暂时只跑 HTTP（未启用 HTTPS），可设置：
+
+- `COOKIE_SECURE=false`
+
 网络拉取 Docker Hub 不稳定时，可额外设置：
 
 - `NODE_IMAGE`（默认 `node:20-alpine`）

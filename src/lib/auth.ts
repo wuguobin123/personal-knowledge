@@ -7,12 +7,47 @@ type AdminSession = {
   username: string;
 };
 
+type CookieSecurityInput = {
+  forwardedProto?: string | null;
+  requestUrl?: string | null;
+};
+
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
   if (!secret || secret.length < 16) {
     throw new Error("AUTH_SECRET is not set or too short.");
   }
   return new TextEncoder().encode(secret);
+}
+
+export function shouldUseSecureCookies({ forwardedProto, requestUrl }: CookieSecurityInput = {}) {
+  const secureOverride = String(process.env.COOKIE_SECURE || "")
+    .trim()
+    .toLowerCase();
+  if (secureOverride === "true") return true;
+  if (secureOverride === "false") return false;
+
+  if (process.env.NODE_ENV !== "production") {
+    return false;
+  }
+
+  const normalizedProto = forwardedProto
+    ?.split(",")
+    .map((item) => item.trim().toLowerCase())
+    .find(Boolean);
+  if (normalizedProto) {
+    return normalizedProto === "https";
+  }
+
+  if (requestUrl) {
+    try {
+      return new URL(requestUrl).protocol === "https:";
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 export async function createAdminSessionToken(username: string) {

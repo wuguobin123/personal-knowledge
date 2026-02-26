@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { ADMIN_SESSION_COOKIE, createAdminSessionToken } from "@/lib/auth";
+import { ADMIN_SESSION_COOKIE, createAdminSessionToken, shouldUseSecureCookies } from "@/lib/auth";
 
 export async function POST(request: Request) {
   const username = String(process.env.ADMIN_USERNAME || "").trim();
@@ -23,11 +23,15 @@ export async function POST(request: Request) {
   try {
     const token = await createAdminSessionToken(inputUsername);
     const cookieStore = await cookies();
+    const secureCookie = shouldUseSecureCookies({
+      forwardedProto: request.headers.get("x-forwarded-proto"),
+      requestUrl: request.url,
+    });
 
     cookieStore.set(ADMIN_SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: secureCookie,
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
     });

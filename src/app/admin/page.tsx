@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import AdminEditor from "./admin-editor";
-import { ADMIN_SESSION_COOKIE, getAdminSession } from "@/lib/auth";
+import { ADMIN_SESSION_COOKIE, getAdminSession, shouldUseSecureCookies } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -67,10 +67,15 @@ function viewLabel(view: AdminView) {
 async function logoutAction() {
   "use server";
   const cookieStore = await cookies();
+  const headerStore = await headers();
+  const secureCookie = shouldUseSecureCookies({
+    forwardedProto: headerStore.get("x-forwarded-proto"),
+  });
+
   cookieStore.set(ADMIN_SESSION_COOKIE, "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookie,
     path: "/",
     maxAge: 0,
   });

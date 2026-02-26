@@ -92,6 +92,17 @@ If you cannot change daemon config, use explicit mirror image names, e.g.:
 EOF
 }
 
+print_build_oom_hint() {
+  cat >&2 <<'EOF'
+If build logs contain "npm error signal SIGKILL" during "next build", it's usually OOM.
+Try these:
+  1) Increase server memory or add swap.
+  2) Lower NODE_MAX_OLD_SPACE_SIZE in env file, e.g.:
+       NODE_MAX_OLD_SPACE_SIZE=768
+  3) If logs show "JavaScript heap out of memory", increase it to 1024 or 1536.
+EOF
+}
+
 load_env() {
   set -a
   # shellcheck disable=SC1090
@@ -187,6 +198,7 @@ main() {
   if [[ $SKIP_BUILD -eq 0 ]]; then
     if ! "${COMPOSE_CMD[@]}" build app; then
       print_registry_timeout_hint
+      print_build_oom_hint
       exit 1
     fi
   fi

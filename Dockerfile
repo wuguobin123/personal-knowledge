@@ -12,9 +12,10 @@ COPY prisma.config.ts ./
 RUN npm ci
 
 FROM deps AS builder
+ARG NODE_MAX_OLD_SPACE_SIZE=768
 
 COPY . .
-RUN npm run build
+RUN NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" npm run build
 
 FROM base AS runner
 

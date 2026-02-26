@@ -70,6 +70,10 @@ cp .env.example .env
 - `MYSQL_IMAGE`（默认 `mysql:8.0`）
 - `NGINX_IMAGE`（默认 `nginx:1.21-alpine`）
 
+服务器内存较小（`next build` 出现 `SIGKILL`）时，可设置：
+
+- `NODE_MAX_OLD_SPACE_SIZE`（默认 `768`，如出现 `JavaScript heap out of memory` 再调高到 `1024` / `1536`）
+
 阿里云加速地址 `https://him7zrbc.mirror.aliyuncs.com` 请配置为 Docker daemon mirror（不要直接写到 `NODE_IMAGE`）：
 
 ```bash

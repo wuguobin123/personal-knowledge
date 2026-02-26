@@ -10,10 +10,11 @@ RUN npm ci
 FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 ENV NODE_ENV=production
+ARG NODE_MAX_OLD_SPACE_SIZE=768
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" npm run build
 
 FROM ${NODE_IMAGE} AS runner
 WORKDIR /app

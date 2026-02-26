@@ -26,6 +26,7 @@ services:
       dockerfile: Dockerfile.prod
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
+        NODE_MAX_OLD_SPACE_SIZE: ${NODE_MAX_OLD_SPACE_SIZE:-768}
     container_name: blog-migrate
     restart: "no"
     environment:
@@ -41,6 +42,7 @@ services:
       dockerfile: Dockerfile.prod
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
+        NODE_MAX_OLD_SPACE_SIZE: ${NODE_MAX_OLD_SPACE_SIZE:-768}
     container_name: blog-app
     restart: unless-stopped
     expose:

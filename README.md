@@ -281,6 +281,30 @@ npm run ai-news:collect
 npm run ai-news:scheduler
 ```
 
+手动触发接口（需管理员登录态）：
+
+```bash
+# 1) 登录并保存 cookie
+curl -i -c /tmp/pk_admin.cookie \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"你的后台密码"}' \
+  http://127.0.0.1:3000/api/auth/login
+
+# 2) 触发抓取（默认抓今天）
+curl -b /tmp/pk_admin.cookie -X POST \
+  http://127.0.0.1:3000/api/admin/ai-news/collect
+
+# 3) 指定日期/时区触发（用于回归测试）
+curl -b /tmp/pk_admin.cookie -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"targetDateKey":"2026-02-27","timeZone":"Asia/Shanghai"}' \
+  http://127.0.0.1:3000/api/admin/ai-news/collect
+
+# 4) 查看是否仍在执行
+curl -b /tmp/pk_admin.cookie \
+  http://127.0.0.1:3000/api/admin/ai-news/collect
+```
+
 可用环境变量（可选）：
 
 - `AI_NEWS_TIMEZONE`：默认 `Asia/Shanghai`
@@ -288,4 +312,10 @@ npm run ai-news:scheduler
 - `AI_NEWS_RUN_ON_START`：默认 `false`
 - `AI_NEWS_MAX_NEWS_ITEMS`：默认 `25`
 - `AI_NEWS_MAX_GITHUB_ITEMS`：默认 `20`
+- `AI_NEWS_TRANSLATE_TIMEOUT_MS`：翻译请求超时（毫秒），默认 `45000`
+- `AI_NEWS_TRANSLATE_BATCH_SIZE`：每批翻译条数，默认 `8`
+- `AI_NEWS_GITHUB_HIGH_STAR_THRESHOLD`：高星 GitHub 项目阈值，默认 `200`
 - `GITHUB_TOKEN`：可选，提升 GitHub API 配额
+
+抓取流程会把新闻标题和摘要统一改写成中文；当 GitHub 项目星标高于阈值时，摘要会优先说明项目具体用途与解决问题。
+新闻源会优先抓取最新 AI 热点，包含 Hacker News（最新+热榜）与 36 氪 AI 频道。

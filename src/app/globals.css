@@ -2950,7 +2950,9 @@ p {
   gap: 6px;
 }
 
-.admin-dash-pagination div button {
+.admin-dash-pagination div button,
+.admin-dash-pagination div a,
+.admin-dash-pagination div span {
   width: 32px;
   height: 32px;
   border-radius: 8px;
@@ -2959,15 +2961,21 @@ p {
   color: #9cb2c9;
   font: inherit;
   cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.admin-dash-pagination div button.is-active {
+.admin-dash-pagination div button.is-active,
+.admin-dash-pagination div a.is-active {
   color: #ffffff;
   border-color: rgba(35, 126, 215, 0.95);
   background: linear-gradient(180deg, #278de6, #1a78d5);
 }
 
-.admin-dash-pagination div button:disabled {
+.admin-dash-pagination div button:disabled,
+.admin-dash-pagination div span.is-disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
@@ -3048,6 +3056,143 @@ p {
   font-weight: 600;
 }
 
+.admin-ainews-detail {
+  margin-top: 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(30, 58, 84, 0.9);
+  background: rgba(10, 29, 48, 0.9);
+  padding: 20px;
+}
+
+.admin-ainews-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.admin-ainews-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 12, 22, 0.72);
+}
+
+.admin-ainews-detail-modal {
+  position: relative;
+  z-index: 1;
+  margin-top: 0;
+  width: min(960px, 100%);
+  max-height: min(85vh, 900px);
+  overflow: auto;
+}
+
+.admin-ainews-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-ainews-detail-head h3 {
+  margin: 0;
+  color: #e9f2fb;
+  font-size: clamp(1.3rem, 0.8vw + 1rem, 1.9rem);
+}
+
+.admin-ainews-detail-head p {
+  margin: 8px 0 0;
+  color: #88a4bf;
+  font-size: 0.9rem;
+}
+
+.admin-ainews-detail-head > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-ainews-detail-head > div:last-child a {
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid rgba(37, 121, 206, 0.9);
+  background: rgba(14, 48, 80, 0.88);
+  color: #dbeafb;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.admin-ainews-summary {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(30, 56, 82, 0.88);
+  background: rgba(8, 23, 39, 0.72);
+  color: #a8bdd3;
+  line-height: 1.6;
+}
+
+.admin-ainews-meta {
+  margin: 16px 0 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-ainews-meta div {
+  border-radius: 10px;
+  border: 1px solid rgba(29, 54, 78, 0.88);
+  background: rgba(9, 25, 42, 0.8);
+  padding: 10px 12px;
+}
+
+.admin-ainews-meta dt {
+  margin: 0;
+  color: #7e98b4;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.admin-ainews-meta dd {
+  margin: 8px 0 0;
+  color: #e1ecf8;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.admin-ainews-raw {
+  margin-top: 16px;
+}
+
+.admin-ainews-raw h4 {
+  margin: 0 0 10px;
+  color: #8aa6c3;
+  font-size: 0.86rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.admin-ainews-raw pre {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(31, 58, 85, 0.9);
+  background: rgba(8, 21, 35, 0.95);
+  color: #9dc4f0;
+  padding: 12px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 @media (max-width: 1100px) {
   .admin-dash-sidebar {
     width: 230px;
@@ -3099,6 +3244,10 @@ p {
 
   .admin-dash-stats {
     grid-template-columns: 1fr;
+  }
+
+  .admin-ainews-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .admin-assistant-topbar {
@@ -3178,6 +3327,26 @@ p {
   .admin-dash-pagination {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .admin-ainews-detail-head {
+    flex-direction: column;
+  }
+
+  .admin-ainews-detail-head > div:last-child {
+    width: 100%;
+  }
+
+  .admin-ainews-detail-head > div:last-child a {
+    flex: 1;
+  }
+
+  .admin-ainews-modal {
+    padding: 12px;
+  }
+
+  .admin-ainews-meta {
+    grid-template-columns: 1fr;
   }
 
   .admin-assistant-feed {

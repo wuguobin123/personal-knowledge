@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import AdminEditor from "./admin-editor";
+import QaAssistant from "./qa-assistant";
 import { ADMIN_SESSION_COOKIE, getAdminSession, shouldUseSecureCookies } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -169,103 +170,7 @@ export default async function AdminPage({ searchParams }: Props) {
         {view === "write" ? (
           <AdminEditor username={session.username} embedded />
         ) : view === "qa" ? (
-          <section className="admin-assistant-page">
-            <header className="admin-assistant-topbar">
-              <div className="admin-assistant-topic">
-                <h2>SEO Strategy for Nov Post</h2>
-                <span />
-                <div className="admin-assistant-mode-switch">
-                  <button type="button" className="is-active">
-                    Blog Context
-                  </button>
-                  <button type="button">Web Search</button>
-                </div>
-              </div>
-              <div className="admin-assistant-top-actions">
-                <button type="button">Share</button>
-                <button type="button" aria-label="More actions">
-                  ...
-                </button>
-              </div>
-            </header>
-
-            <div className="admin-assistant-feed">
-              <article className="admin-assistant-row">
-                <div className="admin-assistant-avatar is-ai">AI</div>
-                <div className="admin-assistant-bubble is-ai">
-                  <p>
-                    Hello! I&apos;ve analyzed your upcoming blog post &quot;Mastering Digital Workflows&quot;.
-                    Based on your previous content, here are some SEO suggestions:
-                  </p>
-                  <ul>
-                    <li>
-                      Target Keyword: <strong>&quot;productivity automation tools&quot;</strong>
-                    </li>
-                    <li>Include 3 internal links to your &quot;Time Management&quot; series.</li>
-                    <li>Add an alt-tag for the main diagram about workflow loops.</li>
-                  </ul>
-                </div>
-              </article>
-
-              <div className="admin-assistant-actions">
-                <button type="button">Like</button>
-                <button type="button">Dislike</button>
-                <button type="button">Copy</button>
-              </div>
-
-              <article className="admin-assistant-row is-user">
-                <div className="admin-assistant-avatar is-user">U</div>
-                <div className="admin-assistant-message">
-                  <div className="admin-assistant-bubble is-user">
-                    That sounds great. Can you write a 150-word meta description that includes the target
-                    keyword and has a professional but engaging tone?
-                  </div>
-                  <p>Sent 12:45 PM</p>
-                </div>
-              </article>
-
-              <article className="admin-assistant-row">
-                <div className="admin-assistant-avatar is-ai">AI</div>
-                <div className="admin-assistant-bubble is-ai">
-                  <p>Certainly! Here&apos;s a meta description optimized for your blog:</p>
-                  <pre>
-                    <code>
-                      {'<meta name="description" content="Discover the best productivity automation tools to streamline your digital workflow. Learn how to eliminate repetitive tasks and focus on what matters most with our comprehensive guide for modern professionals.">'}
-                    </code>
-                  </pre>
-                  <p>I&apos;ve also drafted a slightly longer version if you need more character space.</p>
-                </div>
-              </article>
-            </div>
-
-            <footer className="admin-assistant-compose">
-              <div className="admin-assistant-compose-box">
-                <textarea rows={3} placeholder="Type your message here..." />
-                <div className="admin-assistant-compose-row">
-                  <div className="admin-assistant-compose-tools">
-                    <button type="button" aria-label="Attach file">
-                      Attach
-                    </button>
-                    <button type="button" aria-label="Add image">
-                      Image
-                    </button>
-                    <button type="button" aria-label="Use web search">
-                      Web
-                    </button>
-                  </div>
-                  <div className="admin-assistant-compose-send">
-                    <span>Enter to send / Shift + Enter for new line</span>
-                    <button type="button">Send</button>
-                  </div>
-                </div>
-              </div>
-              <div className="admin-assistant-shortcuts">
-                <button type="button">Summarize Blog Post</button>
-                <button type="button">Check Grammar</button>
-                <button type="button">Find References</button>
-              </div>
-            </footer>
-          </section>
+          <QaAssistant />
         ) : (
           <>
             <header className="admin-dash-header">

@@ -2460,6 +2460,69 @@ p {
   line-height: 1.55;
 }
 
+.admin-assistant-ai-content {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-assistant-final {
+  border: 1px solid rgba(48, 120, 185, 0.58);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(10, 36, 64, 0.82), rgba(8, 29, 50, 0.82));
+  padding: 12px 14px 14px;
+}
+
+.admin-assistant-final-label {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(63, 154, 232, 0.8);
+  background: rgba(23, 99, 170, 0.3);
+  color: #68beff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.admin-assistant-final .markdown-body {
+  margin-top: 10px;
+}
+
+.admin-assistant-thinking {
+  border: 1px dashed rgba(88, 124, 160, 0.56);
+  border-radius: 12px;
+  background: rgba(8, 26, 46, 0.48);
+  overflow: hidden;
+}
+
+.admin-assistant-thinking summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  color: #9ab5cf;
+  font-size: 0.84rem;
+  font-weight: 600;
+  user-select: none;
+}
+
+.admin-assistant-thinking summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-assistant-thinking[open] summary {
+  border-bottom: 1px solid rgba(57, 87, 117, 0.56);
+}
+
+.admin-assistant-thinking-body {
+  padding: 12px 14px 14px;
+}
+
+.admin-assistant-thinking-body .markdown-body {
+  opacity: 0.88;
+  font-size: 0.95rem;
+}
+
 .admin-assistant-bubble.is-user {
   margin-left: auto;
   border: 1px solid rgba(47, 139, 225, 0.9);

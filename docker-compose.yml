@@ -11,6 +11,17 @@ x-app-env: &app-env
   OSS_PUBLIC_URL: ${OSS_PUBLIC_URL:-}
   NEXT_TELEMETRY_DISABLED: "1"
 
+x-ai-news-env: &ai-news-env
+  AI_NEWS_TIMEZONE: ${AI_NEWS_TIMEZONE:-Asia/Shanghai}
+  AI_NEWS_RUN_AT: ${AI_NEWS_RUN_AT:-07:00}
+  AI_NEWS_RUN_ON_START: ${AI_NEWS_RUN_ON_START:-false}
+  AI_NEWS_CHECK_INTERVAL_SECONDS: ${AI_NEWS_CHECK_INTERVAL_SECONDS:-60}
+  AI_NEWS_RETRY_COOLDOWN_SECONDS: ${AI_NEWS_RETRY_COOLDOWN_SECONDS:-900}
+  AI_NEWS_MAX_NEWS_ITEMS: ${AI_NEWS_MAX_NEWS_ITEMS:-25}
+  AI_NEWS_MAX_GITHUB_ITEMS: ${AI_NEWS_MAX_GITHUB_ITEMS:-20}
+  AI_NEWS_FETCH_TIMEOUT_MS: ${AI_NEWS_FETCH_TIMEOUT_MS:-15000}
+  GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+
 services:
   mysql:
     image: ${MYSQL_IMAGE:-mysql:8.0}
@@ -54,6 +65,16 @@ services:
       start_period: 20s
     volumes:
       - uploads_data:/app/public/uploads
+
+  scheduler:
+    image: personal-knowledge-app:latest
+    restart: unless-stopped
+    environment:
+      <<: [*app-env, *ai-news-env]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["npm", "run", "ai-news:scheduler"]
 
   nginx:
     image: ${NGINX_IMAGE:-nginx:1.21-alpine}

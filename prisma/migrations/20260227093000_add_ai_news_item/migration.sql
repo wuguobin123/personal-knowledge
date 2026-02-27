@@ -1,0 +1,26 @@
+CREATE TABLE `AiNewsItem` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT,
+  `title` VARCHAR(300) NOT NULL,
+  `summary` VARCHAR(1000) NULL,
+  `url` VARCHAR(500) NOT NULL,
+  `source` VARCHAR(80) NOT NULL,
+  `category` ENUM('GENERAL_NEWS', 'MODEL_RELEASE', 'GITHUB_PROJECT') NOT NULL DEFAULT 'GENERAL_NEWS',
+  `externalId` VARCHAR(191) NULL,
+  `stars` INTEGER NULL,
+  `language` VARCHAR(20) NULL,
+  `tags` JSON NULL,
+  `newsDate` DATE NOT NULL,
+  `fetchedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `canPublish` BOOLEAN NOT NULL DEFAULT false,
+  `isDeleted` BOOLEAN NOT NULL DEFAULT false,
+  `deletedAt` DATETIME(3) NULL,
+  `raw` JSON NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL,
+
+  UNIQUE INDEX `AiNewsItem_source_url_key`(`source`, `url`),
+  INDEX `AiNewsItem_newsDate_category_idx`(`newsDate`, `category`),
+  INDEX `AiNewsItem_canPublish_isDeleted_newsDate_idx`(`canPublish`, `isDeleted`, `newsDate`),
+  INDEX `AiNewsItem_source_externalId_idx`(`source`, `externalId`),
+  PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

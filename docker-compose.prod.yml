@@ -72,6 +72,31 @@ services:
       retries: 12
       start_period: 30s
 
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
+        NODE_MAX_OLD_SPACE_SIZE: ${NODE_MAX_OLD_SPACE_SIZE:-768}
+    container_name: blog-scheduler
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      AI_NEWS_TIMEZONE: ${AI_NEWS_TIMEZONE:-Asia/Shanghai}
+      AI_NEWS_RUN_AT: ${AI_NEWS_RUN_AT:-07:00}
+      AI_NEWS_RUN_ON_START: ${AI_NEWS_RUN_ON_START:-false}
+      AI_NEWS_CHECK_INTERVAL_SECONDS: ${AI_NEWS_CHECK_INTERVAL_SECONDS:-60}
+      AI_NEWS_RETRY_COOLDOWN_SECONDS: ${AI_NEWS_RETRY_COOLDOWN_SECONDS:-900}
+      AI_NEWS_MAX_NEWS_ITEMS: ${AI_NEWS_MAX_NEWS_ITEMS:-25}
+      AI_NEWS_MAX_GITHUB_ITEMS: ${AI_NEWS_MAX_GITHUB_ITEMS:-20}
+      AI_NEWS_FETCH_TIMEOUT_MS: ${AI_NEWS_FETCH_TIMEOUT_MS:-15000}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    command: ["npm", "run", "ai-news:scheduler"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   nginx:
     image: ${NGINX_IMAGE:-nginx:1.21-alpine}
     container_name: blog-nginx

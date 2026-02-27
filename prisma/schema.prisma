@@ -27,8 +27,40 @@ model Article {
   @@index([sourceType])
 }
 
+model AiNewsItem {
+  id         Int            @id @default(autoincrement())
+  title      String         @db.VarChar(300)
+  summary    String?        @db.VarChar(1000)
+  url        String         @db.VarChar(500)
+  source     String         @db.VarChar(80)
+  category   AiNewsCategory @default(GENERAL_NEWS)
+  externalId String?        @db.VarChar(191)
+  stars      Int?
+  language   String?        @db.VarChar(20)
+  tags       Json?
+  newsDate   DateTime       @db.Date
+  fetchedAt  DateTime       @default(now())
+  canPublish Boolean        @default(false)
+  isDeleted  Boolean        @default(false)
+  deletedAt  DateTime?
+  raw        Json?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([source, url])
+  @@index([newsDate, category])
+  @@index([canPublish, isDeleted, newsDate])
+  @@index([source, externalId])
+}
+
 enum ArticleSourceType {
   ORIGINAL
   CRAWLER
   TRANSCRIPT
+}
+
+enum AiNewsCategory {
+  GENERAL_NEWS
+  MODEL_RELEASE
+  GITHUB_PROJECT
 }

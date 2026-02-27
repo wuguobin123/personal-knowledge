@@ -21,6 +21,10 @@ services:
     profiles:
       - prod
 
+  scheduler:
+    profiles:
+      - prod
+
 volumes:
   app_node_modules:
   app_next:

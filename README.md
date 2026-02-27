@@ -11,6 +11,7 @@
 - 后台登录鉴权（Cookie Session）
 - 支持 Markdown 渲染与代码高亮
 - 支持图片上传（本地 / 阿里云 OSS）
+- 内置 AI 新闻定时抓取（每天早上 7 点，入库待审核）
 - 内置种子文章数据
 
 ## 1. 本地开发（不使用 Docker）
@@ -111,6 +112,8 @@ NGINX_IMAGE=docker.1ms.run/library/nginx:1.21-alpine
 
 - `http://服务器IP`（默认 Nginx 映射 `80` 端口）
 
+AI 新闻抓取调度器（`scheduler` 服务）会在部署后随 compose 一起启动，默认每天 `07:00`（`AI_NEWS_TIMEZONE` 时区）抓取并入库。
+
 如果需要在首次部署时写入种子数据：
 
 ```bash
@@ -142,6 +145,12 @@ docker compose --env-file .env ps
 
 ```bash
 docker compose --env-file .env logs -f nginx app
+```
+
+查看 AI 新闻调度日志：
+
+```bash
+docker compose --env-file .env logs -f scheduler
 ```
 
 停止服务：
@@ -257,3 +266,26 @@ curl -X POST http://localhost:3000/api/articles \
 2. 不建议放行 `3306` 到公网；如必须开放，请限制白名单。
 3. 生产必须修改 `.env` 里的默认密码与 `AUTH_SECRET`。
 4. 可通过 `NGINX_PORT` 调整对外端口，默认是 `80`。
+
+## 9. AI 新闻抓取
+
+手动执行一次抓取：
+
+```bash
+npm run ai-news:collect
+```
+
+本地启动调度器（每天 07:00 执行）：
+
+```bash
+npm run ai-news:scheduler
+```
+
+可用环境变量（可选）：
+
+- `AI_NEWS_TIMEZONE`：默认 `Asia/Shanghai`
+- `AI_NEWS_RUN_AT`：默认 `07:00`
+- `AI_NEWS_RUN_ON_START`：默认 `false`
+- `AI_NEWS_MAX_NEWS_ITEMS`：默认 `25`
+- `AI_NEWS_MAX_GITHUB_ITEMS`：默认 `20`
+- `GITHUB_TOKEN`：可选，提升 GitHub API 配额

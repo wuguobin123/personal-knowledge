@@ -255,7 +255,7 @@ main() {
     "${COMPOSE_CMD[@]}" run --rm seed
   fi
 
-  "${COMPOSE_CMD[@]}" up -d app nginx
+  "${COMPOSE_CMD[@]}" up -d app scheduler nginx
 
   if [[ $SKIP_HEALTH_CHECK -eq 0 ]]; then
     wait_for_service_healthy app 120

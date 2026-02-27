@@ -10,6 +10,8 @@
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.mjs",
+    "ai-news:collect": "node scripts/collect-ai-news.mjs",
+    "ai-news:scheduler": "node scripts/ai-news-scheduler.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

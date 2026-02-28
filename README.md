@@ -66,6 +66,7 @@ cp .env.example .env
 - `AUTH_SECRET`
 - `MYSQL_ROOT_PASSWORD`
 - `MYSQL_PASSWORD`
+- `SILICONFLOW_API_KEY`（启用后台 AI 助手 / AI 新闻中文本地化时必填）
 
 如果你的生产环境暂时只跑 HTTP（未启用 HTTPS），可设置：
 

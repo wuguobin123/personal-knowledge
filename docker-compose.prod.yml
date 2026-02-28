@@ -60,6 +60,9 @@ services:
       OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
       OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
       OSS_PUBLIC_URL: ${OSS_PUBLIC_URL}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-deepseek-ai/DeepSeek-R1-Distill-Qwen-32B}
+      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://api.siliconflow.cn/v1}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -91,7 +94,13 @@ services:
       AI_NEWS_MAX_NEWS_ITEMS: ${AI_NEWS_MAX_NEWS_ITEMS:-25}
       AI_NEWS_MAX_GITHUB_ITEMS: ${AI_NEWS_MAX_GITHUB_ITEMS:-20}
       AI_NEWS_FETCH_TIMEOUT_MS: ${AI_NEWS_FETCH_TIMEOUT_MS:-15000}
+      AI_NEWS_TRANSLATE_TIMEOUT_MS: ${AI_NEWS_TRANSLATE_TIMEOUT_MS:-45000}
+      AI_NEWS_TRANSLATE_BATCH_SIZE: ${AI_NEWS_TRANSLATE_BATCH_SIZE:-8}
+      AI_NEWS_GITHUB_HIGH_STAR_THRESHOLD: ${AI_NEWS_GITHUB_HIGH_STAR_THRESHOLD:-200}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      SILICONFLOW_MODEL: ${SILICONFLOW_MODEL:-deepseek-ai/DeepSeek-R1-Distill-Qwen-32B}
+      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://api.siliconflow.cn/v1}
     command: ["npm", "run", "ai-news:scheduler"]
     depends_on:
       migrate:

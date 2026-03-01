@@ -33,7 +33,7 @@ services:
     restart: "no"
     environment:
       DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
-    command: ["sh", "-c", "npm run db:migrate || npm run db:push"]
+    command: ["npm", "run", "db:migrate:safe"]
     depends_on:
       mysql:
         condition: service_healthy

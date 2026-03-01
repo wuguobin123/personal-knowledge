@@ -107,7 +107,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    command: ["npm", "run", "db:migrate"]
+    command: ["npm", "run", "db:migrate:safe"]
 
   seed:
     image: personal-knowledge-app:latest

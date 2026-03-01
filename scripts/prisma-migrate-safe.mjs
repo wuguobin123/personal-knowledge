@@ -67,6 +67,26 @@ async function doesTableExist(prisma, tableName) {
   return toNumber(rows[0]?.total) > 0;
 }
 
+async function hasAppliedMigration(prisma, migrationName) {
+  const rows = await prisma.$queryRaw`
+    SELECT COUNT(*) AS total
+    FROM _prisma_migrations
+    WHERE migration_name = ${migrationName}
+      AND finished_at IS NOT NULL
+  `;
+  return toNumber(rows[0]?.total) > 0;
+}
+
+async function markFailedAttemptsRolledBack(prisma, migrationName) {
+  return prisma.$executeRaw`
+    UPDATE _prisma_migrations
+    SET rolled_back_at = NOW(3)
+    WHERE migration_name = ${migrationName}
+      AND finished_at IS NULL
+      AND rolled_back_at IS NULL
+  `;
+}
+
 async function inferResolveFlag(prisma, migrationName) {
   const migrationFile = path.resolve(
     rootDir,
@@ -181,6 +201,25 @@ async function main() {
       const resolveRun = runPrisma(["migrate", "resolve", decision.flag, migrationName]);
       printRunOutput(resolveRun);
       if (resolveRun.status !== 0) {
+        const resolveOutput = `${resolveRun.stdout || ""}\n${resolveRun.stderr || ""}`.toLowerCase();
+        const alreadyApplied = resolveOutput.includes("already recorded as applied");
+        if (alreadyApplied) {
+          const hasApplied = await hasAppliedMigration(prisma, migrationName);
+          if (hasApplied) {
+            const affected = await markFailedAttemptsRolledBack(prisma, migrationName);
+            if (toNumber(affected) > 0) {
+              console.error(
+                `[migrate-safe] ${migrationName}: cleared ${affected} stale failed attempt(s) via rolled_back_at.`,
+              );
+            } else {
+              console.error(
+                `[migrate-safe] ${migrationName}: already applied and no stale failed attempt found.`,
+              );
+            }
+            continue;
+          }
+        }
+
         console.error(`[migrate-safe] prisma migrate resolve failed for ${migrationName}.`);
         process.exit(resolveRun.status ?? 1);
       }

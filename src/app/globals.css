@@ -2913,6 +2913,37 @@ p {
   margin-top: 10px;
 }
 
+.admin-assistant-mcp-status {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(63, 154, 232, 0.36);
+  background: rgba(20, 79, 133, 0.18);
+  display: grid;
+  gap: 3px;
+}
+
+.admin-assistant-mcp-status strong {
+  color: #8bccff;
+  font-size: 0.78rem;
+}
+
+.admin-assistant-mcp-status span {
+  color: #b0cbe7;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.admin-assistant-mcp-status.is-error {
+  border-color: rgba(220, 104, 104, 0.45);
+  background: rgba(128, 42, 42, 0.2);
+}
+
+.admin-assistant-mcp-status.is-error strong {
+  color: #ffbbbb;
+}
+
 .admin-assistant-thinking {
   border: 1px dashed rgba(88, 124, 160, 0.56);
   border-radius: 12px;
@@ -5422,6 +5453,28 @@ p {
   border: 1px solid #b9d0f3;
   background: #eaf2ff;
   color: #2f6feb;
+}
+
+.admin-assistant-mcp-status {
+  border: 1px solid #d6e4fb;
+  background: #eef5ff;
+}
+
+.admin-assistant-mcp-status strong {
+  color: #2f6feb;
+}
+
+.admin-assistant-mcp-status span {
+  color: #5f738d;
+}
+
+.admin-assistant-mcp-status.is-error {
+  border-color: #f0cad0;
+  background: #fff3f5;
+}
+
+.admin-assistant-mcp-status.is-error strong {
+  color: #bf2f40;
 }
 
 .admin-assistant-thinking {

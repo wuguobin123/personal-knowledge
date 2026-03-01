@@ -18,6 +18,7 @@ type UiMessage = {
   role: UiRole;
   content: string;
   createdAt: number;
+  meta?: StreamMetaPayload | null;
 };
 
 type QaReference = {
@@ -257,8 +258,53 @@ function parseHeadersText(raw: string) {
   return headers;
 }
 
-function AssistantMessage({ content }: { content: string }) {
+function getMcpStatus(meta?: StreamMetaPayload | null) {
+  if (!meta) return null;
+
+  const hasSignal =
+    typeof meta.mcpUsed === "boolean" ||
+    Boolean(meta.mcpModuleLabel || meta.mcpModuleKey || meta.mcpToolName || meta.mcpError);
+  if (!hasSignal) {
+    return null;
+  }
+
+  const moduleLabel = meta.mcpModuleLabel || meta.mcpModuleKey || "未指定模块";
+  const toolName = meta.mcpToolName || "未指定工具";
+  const reason = meta.mcpReason?.trim() || "";
+  const reasonLine = reason ? `路由原因：${reason}` : "";
+
+  if (meta.mcpError?.trim()) {
+    return {
+      title: `MCP 调用失败：${moduleLabel} · ${toolName}`,
+      detail: `${meta.mcpError}${reasonLine ? `\n${reasonLine}` : ""}`,
+      isError: true,
+    };
+  }
+
+  if (meta.mcpUsed) {
+    return {
+      title: `MCP 已调用：${moduleLabel} · ${toolName}`,
+      detail: reasonLine,
+      isError: false,
+    };
+  }
+
+  return {
+    title: "本次未调用 MCP 工具",
+    detail: reasonLine,
+    isError: false,
+  };
+}
+
+function AssistantMessage({
+  content,
+  meta,
+}: {
+  content: string;
+  meta?: StreamMetaPayload | null;
+}) {
   const parsed = useMemo(() => parseAssistantContent(content), [content]);
+  const mcpStatus = useMemo(() => getMcpStatus(meta), [meta]);
   const finalAnswer = parsed.finalAnswer.trim()
     ? parsed.finalAnswer
     : parsed.thinking
@@ -269,6 +315,12 @@ function AssistantMessage({ content }: { content: string }) {
     <div className="admin-assistant-ai-content">
       <div className="admin-assistant-final">
         <span className="admin-assistant-final-label">最终结果</span>
+        {mcpStatus ? (
+          <div className={`admin-assistant-mcp-status${mcpStatus.isError ? " is-error" : ""}`}>
+            <strong>{mcpStatus.title}</strong>
+            {mcpStatus.detail ? <span>{mcpStatus.detail}</span> : null}
+          </div>
+        ) : null}
         <MarkdownRenderer content={finalAnswer} />
       </div>
 
@@ -331,6 +383,7 @@ export default function QaAssistant() {
   const [mcpKeywordHints, setMcpKeywordHints] = useState("");
   const [mcpToolAllowlist, setMcpToolAllowlist] = useState("");
   const [mcpHeadersText, setMcpHeadersText] = useState("{}");
+  const [mcpTesting, setMcpTesting] = useState(false);
 
   useEffect(() => {
     const node = feedRef.current;
@@ -622,6 +675,63 @@ export default function QaAssistant() {
     }
   }
 
+  async function testMcpConnection() {
+    if (mcpSubmitting || mcpTesting) return;
+
+    setMcpTesting(true);
+    setMcpError("");
+    setMcpMessage("");
+
+    try {
+      const endpointUrl = mcpEndpointUrl.trim();
+      if (!endpointUrl) {
+        throw new Error("请先填写 MCP Endpoint URL。");
+      }
+
+      const headers = parseHeadersText(mcpHeadersText);
+      const response = await fetch("/api/admin/qa/mcp-modules/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpointUrl,
+          headers,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, "MCP 连接测试失败。"));
+      }
+
+      const payload = (await response.json()) as {
+        message?: string;
+        serverInfo?: {
+          name?: string;
+          version?: string;
+        };
+        toolCount?: number;
+        sampleTools?: string[];
+      };
+      const serverName = payload.serverInfo?.name?.trim() || "未知服务";
+      const serverVersion = payload.serverInfo?.version?.trim();
+      const serverLabel = serverVersion ? `${serverName} v${serverVersion}` : serverName;
+      const toolCount = Number.isFinite(payload.toolCount) ? Number(payload.toolCount) : null;
+      const sampleTools = Array.isArray(payload.sampleTools) ? payload.sampleTools.filter(Boolean) : [];
+      const toolsLabel =
+        toolCount === null
+          ? ""
+          : sampleTools.length > 0
+            ? `，工具数 ${toolCount}（${sampleTools.join(", ")}）`
+            : `，工具数 ${toolCount}`;
+
+      setMcpMessage(payload.message?.trim() || `连接成功：${serverLabel}${toolsLabel}`);
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "MCP 连接测试失败。";
+      setMcpError(message);
+    } finally {
+      setMcpTesting(false);
+    }
+  }
+
   async function sendMessage(rawText: string) {
     const content = rawText.trim();
     if (!content || loading) return;
@@ -639,6 +749,7 @@ export default function QaAssistant() {
       role: "assistant",
       content: "",
       createdAt: Date.now(),
+      meta: null,
     };
     const nextMessages = [...requestMessages, assistantMessage];
     setMessages(nextMessages);
@@ -691,6 +802,18 @@ export default function QaAssistant() {
           ),
         );
       };
+      const updateAssistantMeta = (meta: StreamMetaPayload | null) => {
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantId
+              ? {
+                  ...message,
+                  meta,
+                }
+              : message,
+          ),
+        );
+      };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -711,7 +834,10 @@ export default function QaAssistant() {
 
           if (parsedEvent.event === "meta") {
             const meta = parseJson<StreamMetaPayload>(parsedEvent.data);
-            if (meta) latestMeta = meta;
+            if (meta) {
+              latestMeta = meta;
+              updateAssistantMeta(meta);
+            }
             continue;
           }
 
@@ -742,6 +868,7 @@ export default function QaAssistant() {
             if (donePayload) {
               latestMeta = donePayload;
               hasDone = true;
+              updateAssistantMeta(donePayload);
               const finalWithReferences = `${donePayload.answer}${formatReferences(
                 donePayload.references,
               )}`;
@@ -764,6 +891,7 @@ export default function QaAssistant() {
       }
 
       if (!hasDone && latestMeta) {
+        updateAssistantMeta(latestMeta);
         updateAssistantMessage((prevContent) =>
           appendReferencesToContent(prevContent, latestMeta?.references || []),
         );
@@ -1184,13 +1312,20 @@ export default function QaAssistant() {
                       </label>
 
                       <div className="admin-skill-manager-actions">
-                        <button type="submit" disabled={mcpSubmitting}>
+                        <button type="submit" disabled={mcpSubmitting || mcpTesting}>
                           {mcpSubmitting ? "创建中..." : "创建 MCP 模块"}
                         </button>
                         <button
                           type="button"
+                          onClick={() => void testMcpConnection()}
+                          disabled={mcpSubmitting || mcpTesting}
+                        >
+                          {mcpTesting ? "测试中..." : "连接测试"}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => void loadMcpModules()}
-                          disabled={mcpLoading || mcpSubmitting}
+                          disabled={mcpLoading || mcpSubmitting || mcpTesting}
                         >
                           {mcpLoading ? "刷新中..." : "刷新列表"}
                         </button>
@@ -1235,7 +1370,7 @@ export default function QaAssistant() {
             <article className="admin-assistant-row" key={message.id}>
               <div className="admin-assistant-avatar is-ai">AI</div>
               <div className="admin-assistant-bubble is-ai">
-                <AssistantMessage content={message.content} />
+                <AssistantMessage content={message.content} meta={message.meta} />
               </div>
             </article>
           ) : (

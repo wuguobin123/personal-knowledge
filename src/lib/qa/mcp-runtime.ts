@@ -475,6 +475,15 @@ async function chooseToolWithLlm(input: {
     toolDescription: item.description,
     inputSchema: serializeSchemaForPrompt(item.inputSchema),
   }));
+  const routerInput = [
+    `Mode: ${input.mode}`,
+    "Conversation:",
+    conversation.slice(-5000),
+    "Latest user question:",
+    question,
+    "Available tools:",
+    JSON.stringify(compactTools, null, 2),
+  ].join("\n");
 
   const prompt = ChatPromptTemplate.fromMessages([
     [
@@ -484,21 +493,13 @@ async function chooseToolWithLlm(input: {
         "Decide whether to call exactly one tool.",
         "Only call a tool when external execution is clearly useful.",
         "Return strict JSON only:",
-        "{\"action\":\"skip|use_tool\",\"toolRef\":\"moduleKey::toolName\",\"arguments\":{},\"reason\":\"...\"}",
-        "If action=skip, toolRef must be empty string and arguments must be {}.",
+        "{{\"action\":\"skip|use_tool\",\"toolRef\":\"moduleKey::toolName\",\"arguments\":{{}},\"reason\":\"...\"}}",
+        "If action=skip, toolRef must be empty string and arguments must be {{}}.",
       ].join("\n"),
     ],
     [
       "human",
-      [
-        `Mode: ${input.mode}`,
-        "Conversation:",
-        conversation.slice(-5000),
-        "Latest user question:",
-        question,
-        "Available tools:",
-        JSON.stringify(compactTools, null, 2),
-      ].join("\n"),
+      "{routerInput}",
     ],
   ]);
 
@@ -506,7 +507,9 @@ async function chooseToolWithLlm(input: {
   const parser = new StringOutputParser();
   const chain = prompt.pipe(llm).pipe(parser);
   const raw = await chain.invoke(
-    {},
+    {
+      routerInput,
+    },
     {
       signal: input.signal,
     },
@@ -600,20 +603,31 @@ export async function tryAutoRunQaMcpTool(input: {
   }
 
   const discoveredTools: QaMcpToolDescriptor[] = [];
+  const toolDiscoveryErrors: string[] = [];
   for (const module of candidateModules) {
     try {
       const tools = await listToolsForModule(module, input.signal);
       discoveredTools.push(...tools);
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown tool discovery error.";
+      toolDiscoveryErrors.push(`${module.moduleKey}: ${message}`);
+      console.warn(`[qa:mcp] tools discovery failed for ${module.moduleKey}: ${message}`);
       // Skip broken module for current request to keep Q&A available.
     }
   }
 
   if (discoveredTools.length === 0) {
+    if (toolDiscoveryErrors.length > 0) {
+      return {
+        used: false,
+        reason: `No MCP tools discovered. ${toolDiscoveryErrors.join(" | ").slice(0, 360)}`,
+      };
+    }
     return { used: false };
   }
 
   let choice: QaMcpToolChoice;
+  let routerError = "";
   try {
     choice = await chooseToolWithLlm({
       tools: discoveredTools,
@@ -621,12 +635,20 @@ export async function tryAutoRunQaMcpTool(input: {
       mode: input.mode,
       signal: input.signal,
     });
-  } catch {
+  } catch (error) {
+    routerError = error instanceof Error ? error.message : "Unknown router error.";
+    console.warn(`[qa:mcp] LLM router failed, fallback to heuristic: ${routerError}`);
     const heuristic = heuristicChoice({ tools: discoveredTools, question });
     if (!heuristic) {
-      return { used: false };
+      return {
+        used: false,
+        reason: `LLM router failed and heuristic found no match. ${routerError.slice(0, 260)}`,
+      };
     }
-    choice = heuristic;
+    choice = {
+      ...heuristic,
+      reason: `Heuristic fallback based on keyword match. Router error: ${routerError.slice(0, 220)}`,
+    };
   }
 
   if (choice.action !== "use_tool" || !choice.toolRef) {

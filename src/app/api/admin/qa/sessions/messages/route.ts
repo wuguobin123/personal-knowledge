@@ -45,6 +45,19 @@ function fromConversationStatus(status: "ACTIVE" | "ARCHIVED" | "DELETED") {
   return "active" as const;
 }
 
+function mergeAssistantContent(content: string, reasoning: string | null) {
+  const answer = String(content || "");
+  const think = String(reasoning || "").trim();
+
+  if (!think) {
+    return answer;
+  }
+  if (/<think>/i.test(answer)) {
+    return answer;
+  }
+  return `<think>\n${think}\n</think>\n${answer}`;
+}
+
 export async function GET(request: Request) {
   const session = await getAdminSession();
   if (!session) {
@@ -191,7 +204,10 @@ export async function GET(request: Request) {
         id: item.id,
         role: item.role,
         status: item.status,
-        content: item.content,
+        content:
+          item.role === "ASSISTANT"
+            ? mergeAssistantContent(item.content, item.reasoning)
+            : item.content,
         reasoning: item.reasoning,
         mode: fromSkillMode(item.mode),
         skillId: item.skillId,

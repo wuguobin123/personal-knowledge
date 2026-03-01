@@ -349,6 +349,34 @@ type SiliconFlowMessage = {
   content: string;
 };
 
+function readDeltaText(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (!item || typeof item !== "object" || Array.isArray(item)) return "";
+        const data = item as Record<string, unknown>;
+        if (typeof data.text === "string") return data.text;
+        if (typeof data.content === "string") return data.content;
+        if (typeof data.reasoning_content === "string") return data.reasoning_content;
+        if (typeof data.reasoning === "string") return data.reasoning;
+        return "";
+      })
+      .join("");
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const data = value as Record<string, unknown>;
+    if (typeof data.text === "string") return data.text;
+    if (typeof data.content === "string") return data.content;
+    if (typeof data.reasoning_content === "string") return data.reasoning_content;
+    if (typeof data.reasoning === "string") return data.reasoning;
+  }
+  return "";
+}
+
 function buildDomainStreamMessages(input: {
   conversation: string;
   question: string;
@@ -363,7 +391,8 @@ function buildDomainStreamMessages(input: {
         "If context is insufficient, state assumptions clearly.",
         "Answer in Chinese unless user explicitly requests another language.",
         "Output format must be: <think>reasoning</think> then final answer.",
-        "Do not omit </think>.",
+        "After </think>, output only the final answer.",
+        "Do not include reasoning, analysis, or labels such as '思考过程'/'最终答案' after </think>.",
       ].join("\n"),
     },
     {
@@ -392,7 +421,8 @@ function buildGeneralStreamMessages(input: {
         "Give clear, actionable answers.",
         "Answer in Chinese unless user explicitly requests another language.",
         "Output format must be: <think>reasoning</think> then final answer.",
-        "Do not omit </think>.",
+        "After </think>, output only the final answer.",
+        "Do not include reasoning, analysis, or labels such as '思考过程'/'最终答案' after </think>.",
       ].join("\n"),
     },
     {
@@ -463,14 +493,16 @@ async function streamSiliconFlowResponse(input: {
           delta?: {
             content?: unknown;
             reasoning_content?: unknown;
+            reasoning?: unknown;
           };
         }>;
       };
 
       const delta = payload.choices?.[0]?.delta;
-      const reasoningDelta =
-        delta && typeof delta.reasoning_content === "string" ? delta.reasoning_content : "";
-      const answerDelta = delta && typeof delta.content === "string" ? delta.content : "";
+      const reasoningDelta = delta
+        ? `${readDeltaText(delta.reasoning_content)}${readDeltaText(delta.reasoning)}`
+        : "";
+      const answerDelta = delta ? readDeltaText(delta.content) : "";
 
       if (reasoningDelta) {
         fullThinking += reasoningDelta;

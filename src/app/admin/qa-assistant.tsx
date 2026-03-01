@@ -188,6 +188,10 @@ function parseAssistantContent(content: string): ParsedAssistantContent {
   };
 }
 
+function hasThinkTag(content: string) {
+  return /<\/?think>/i.test(String(content || ""));
+}
+
 function appendAssistantDelta(content: string, part: "thinking" | "answer", delta: string) {
   if (!delta) return content;
 
@@ -347,9 +351,10 @@ function toUiMessageFromPersisted(item: QaPersistedMessage): UiMessage | null {
   }
 
   const meta = normalizeStreamMeta(item.meta);
-  const thinking = String(item.reasoning || "");
-  const finalAnswer = String(item.content || "");
-  const base = buildAssistantContent(thinking, finalAnswer);
+  const mergedContent = String(item.content || "");
+  const base = hasThinkTag(mergedContent)
+    ? mergedContent
+    : buildAssistantContent(String(item.reasoning || ""), mergedContent);
   const content = appendReferencesToContent(base, meta?.references || []);
 
   return {

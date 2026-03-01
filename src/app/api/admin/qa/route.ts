@@ -26,6 +26,8 @@ const requestSchema = z.object({
 type RequestPayload = z.infer<typeof requestSchema>;
 type ConversationRole = "USER" | "ASSISTANT";
 type ConversationMessageStatus = "COMPLETED" | "ERROR";
+const TX_MAX_WAIT_MS = 10_000;
+const TX_TIMEOUT_MS = 20_000;
 
 class ApiError extends Error {
   status: number;
@@ -99,6 +101,77 @@ function buildConversationTitle(content: string) {
   return normalized.slice(0, 80);
 }
 
+function normalizeAssistantCompletion(input: {
+  answer: string;
+  thinking?: string | null;
+}) {
+  const rawAnswer = String(input.answer || "");
+  const explicitThinking = String(input.thinking || "").trim();
+  const reasoningParts: string[] = explicitThinking ? [explicitThinking] : [];
+  const inlineReasoningParts: string[] = [];
+  const thinkBlockPattern = /<think>([\s\S]*?)<\/think>/gi;
+  let matched: RegExpExecArray | null = null;
+  let answerSource = rawAnswer;
+
+  while (true) {
+    matched = thinkBlockPattern.exec(rawAnswer);
+    if (!matched) break;
+    const part = String(matched[1] || "").trim();
+    if (part) {
+      inlineReasoningParts.push(part);
+    }
+  }
+
+  const openTagMatched = rawAnswer.match(/<think>/i);
+  const closeTagMatched = rawAnswer.match(/<\/think>/i);
+  if (
+    inlineReasoningParts.length === 0 &&
+    !openTagMatched &&
+    closeTagMatched &&
+    closeTagMatched.index !== undefined
+  ) {
+    const closeTagIndex = closeTagMatched.index;
+    const closeTagEnd = closeTagIndex + closeTagMatched[0].length;
+    const part = rawAnswer.slice(0, closeTagIndex).trim();
+    if (part) {
+      inlineReasoningParts.push(part);
+    }
+    answerSource = rawAnswer.slice(closeTagEnd);
+  } else if (inlineReasoningParts.length === 0) {
+    const openOnlyMatched = rawAnswer.match(/<think>([\s\S]*)$/i);
+    if (openOnlyMatched) {
+      const part = String(openOnlyMatched[1] || "").trim();
+      if (part) {
+        inlineReasoningParts.push(part);
+      }
+      answerSource = "";
+    }
+  }
+
+  for (const part of inlineReasoningParts) {
+    const duplicated = reasoningParts.some(
+      (existing) => existing === part || existing.includes(part) || part.includes(existing),
+    );
+    if (!duplicated) {
+      reasoningParts.push(part);
+    }
+  }
+
+  if (answerSource === rawAnswer) {
+    answerSource = rawAnswer.replace(/<think>([\s\S]*?)<\/think>/gi, "");
+  }
+  const hasThinkTag = /<\/?think>/i.test(answerSource);
+  const answerWithoutThinkBlocks = answerSource.replace(/<think>([\s\S]*?)<\/think>/gi, "");
+  const normalizedAnswer = answerWithoutThinkBlocks.replace(/<\/?think>/gi, "").trim();
+  const fallbackAnswer = answerSource.replace(/<\/?think>/gi, "").trim();
+  const content = normalizedAnswer || (hasThinkTag ? "" : fallbackAnswer);
+
+  return {
+    content,
+    reasoning: reasoningParts.length > 0 ? reasoningParts.join("\n\n") : null,
+  };
+}
+
 async function loadShortTermMemoryMessages(conversationId: number, limit = 20): Promise<QaMessage[]> {
   const rows = await prisma.qaConversationMessage.findMany({
     where: {
@@ -112,6 +185,7 @@ async function loadShortTermMemoryMessages(conversationId: number, limit = 20): 
     take: Math.max(1, Math.min(100, limit)),
     select: {
       role: true,
+      // Keep short-term memory as pure final answers.
       content: true,
     },
   });
@@ -185,60 +259,66 @@ async function appendConversationMessage(input: {
   meta?: Prisma.InputJsonValue;
 }) {
   const now = new Date();
-  return prisma.$transaction(async (tx) => {
-    const createData = {
-      conversationId: input.conversationId,
-      parentMessageId: input.parentMessageId ?? null,
-      userId: input.userId,
-      role: input.role,
-      status: input.status || "COMPLETED",
-      content: input.content,
-      reasoning: input.reasoning ?? null,
-      mode: toSkillMode(input.mode),
-      skillId: input.skillId,
-      provider: input.provider ?? null,
-      model: input.model ?? null,
-      finishReason: input.finishReason ?? null,
-      promptTokens: input.promptTokens ?? null,
-      completionTokens: input.completionTokens ?? null,
-      totalTokens: input.totalTokens ?? null,
-      latencyMs: input.latencyMs ?? null,
-      errorMessage: input.errorMessage ?? null,
-      ...(input.meta !== undefined ? { meta: input.meta } : {}),
-    };
-
-    let created;
-    try {
-      created = await tx.qaConversationMessage.create({
-        data: createData,
-        select: { id: true },
-      });
-    } catch (error) {
-      if (!isMissingReasoningColumnError(error)) {
-        throw error;
-      }
-
-      const { reasoning: _ignoreReasoning, ...fallbackData } = createData;
-      created = await tx.qaConversationMessage.create({
-        data: fallbackData,
-        select: { id: true },
-      });
-    }
-
-    await tx.qaConversation.update({
-      where: { id: input.conversationId },
-      data: {
-        status: "ACTIVE",
+  return prisma.$transaction(
+    async (tx) => {
+      const createData = {
+        conversationId: input.conversationId,
+        parentMessageId: input.parentMessageId ?? null,
+        userId: input.userId,
+        role: input.role,
+        status: input.status || "COMPLETED",
+        content: input.content,
+        reasoning: input.reasoning ?? null,
         mode: toSkillMode(input.mode),
         skillId: input.skillId,
-        lastMessageAt: now,
-        messageCount: {
-          increment: 1,
+        provider: input.provider ?? null,
+        model: input.model ?? null,
+        finishReason: input.finishReason ?? null,
+        promptTokens: input.promptTokens ?? null,
+        completionTokens: input.completionTokens ?? null,
+        totalTokens: input.totalTokens ?? null,
+        latencyMs: input.latencyMs ?? null,
+        errorMessage: input.errorMessage ?? null,
+        ...(input.meta !== undefined ? { meta: input.meta } : {}),
+      };
+
+      let created;
+      try {
+        created = await tx.qaConversationMessage.create({
+          data: createData,
+          select: { id: true },
+        });
+      } catch (error) {
+        if (!isMissingReasoningColumnError(error)) {
+          throw error;
+        }
+
+        const { reasoning: _ignoreReasoning, ...fallbackData } = createData;
+        created = await tx.qaConversationMessage.create({
+          data: fallbackData,
+          select: { id: true },
+        });
+      }
+
+      await tx.qaConversation.update({
+        where: { id: input.conversationId },
+        data: {
+          status: "ACTIVE",
+          mode: toSkillMode(input.mode),
+          skillId: input.skillId,
+          lastMessageAt: now,
+          messageCount: {
+            increment: 1,
+          },
         },
-      },
-    });
-    return created;
-  });
+      });
+      return created;
+    },
+    {
+      maxWait: TX_MAX_WAIT_MS,
+      timeout: TX_TIMEOUT_MS,
+    },
+  );
 }
 
 export async function POST(request: Request) {
@@ -320,14 +400,20 @@ export async function POST(request: Request) {
             },
           );
 
+          const normalizedAssistant = normalizeAssistantCompletion({
+            answer: result.answer,
+            thinking: result.thinking,
+          });
+          const finalAnswer = normalizedAssistant.content || "抱歉，我暂时无法生成回答。";
+
           await appendConversationMessage({
             conversationId,
             parentMessageId: userMessageId,
             userId: session.username,
             role: "ASSISTANT",
             status: "COMPLETED",
-            content: result.answer,
-            reasoning: result.thinking || null,
+            content: finalAnswer,
+            reasoning: normalizedAssistant.reasoning,
             mode: parsed.data.mode,
             skillId: parsed.data.skillId,
             provider: getAssistantProvider(),
@@ -350,7 +436,11 @@ export async function POST(request: Request) {
             }),
           });
 
-          push("done", result);
+          push("done", {
+            ...result,
+            answer: finalAnswer,
+            thinking: normalizedAssistant.reasoning || "",
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Failed to run Q&A assistant.";
           try {

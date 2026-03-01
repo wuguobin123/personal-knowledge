@@ -70,7 +70,7 @@ const SHORTCUTS = [
   "帮我检查下面这段内容的语法和可读性。",
   "基于我的博客内容，给出 5 个可写的新选题。",
 ];
-const DEFAULT_QA_SKILLS = listQaSkills();
+const DEFAULT_QA_SKILLS: QaSkillOption[] = [...listQaSkills()];
 
 function messageId(role: UiRole) {
   return `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -238,7 +238,7 @@ export default function QaAssistant() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<QaMode>("auto");
-  const [skills, setSkills] = useState<QaSkillOption[]>(DEFAULT_QA_SKILLS);
+  const [skills, setSkills] = useState<QaSkillOption[]>([...DEFAULT_QA_SKILLS]);
   const [selectedSkill, setSelectedSkill] = useState<QaSkillOption>(DEFAULT_QA_SKILLS[0]);
   const [skillId, setSkillId] = useState<QaSkillId>(DEFAULT_QA_SKILL_ID);
   const [skillsLoading, setSkillsLoading] = useState(false);
@@ -333,7 +333,7 @@ export default function QaAssistant() {
         totalPages?: number;
         page?: number;
       };
-      const nextSkills = Array.isArray(payload.skills) ? payload.skills : DEFAULT_QA_SKILLS;
+      const nextSkills = Array.isArray(payload.skills) ? payload.skills : [...DEFAULT_QA_SKILLS];
       setSkills(nextSkills);
       setSkillTotal(Number.isFinite(payload.total) ? Number(payload.total) : nextSkills.length);
       setSkillTotalPages(Number.isFinite(payload.totalPages) ? Math.max(1, Number(payload.totalPages)) : 1);
@@ -351,7 +351,7 @@ export default function QaAssistant() {
     } catch (fetchError) {
       const message = fetchError instanceof Error ? fetchError.message : "Failed to load skills.";
       setSkillError(message);
-      setSkills(DEFAULT_QA_SKILLS);
+      setSkills([...DEFAULT_QA_SKILLS]);
       setSkillTotal(DEFAULT_QA_SKILLS.length);
       setSkillTotalPages(1);
       setSkillPage(1);

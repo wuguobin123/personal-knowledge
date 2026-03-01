@@ -92,10 +92,13 @@ async function loadShortTermMemoryMessages(conversationId: number, limit = 20): 
 
   return rows
     .reverse()
-    .map((item) => ({
-      role: item.role === "USER" ? "user" : "assistant",
-      content: String(item.content || "").trim(),
-    }))
+    .map((item) => {
+      const role: QaMessage["role"] = item.role === "USER" ? "user" : "assistant";
+      return {
+        role,
+        content: String(item.content || "").trim(),
+      } satisfies QaMessage;
+    })
     .filter((item) => item.content.length > 0);
 }
 

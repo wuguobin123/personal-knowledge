@@ -4,6 +4,7 @@ import { getAdminSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_QA_SKILL_ID } from "@/lib/qa/skills-catalog";
 import { runQaSkillStream } from "@/lib/qa/skills-runtime";
+import type { QaMessage } from "@/lib/qa/multi-agent";
 
 export const runtime = "nodejs";
 
@@ -70,6 +71,32 @@ function buildConversationTitle(content: string) {
     return "新会话";
   }
   return normalized.slice(0, 80);
+}
+
+async function loadShortTermMemoryMessages(conversationId: number, limit = 20): Promise<QaMessage[]> {
+  const rows = await prisma.qaConversationMessage.findMany({
+    where: {
+      conversationId,
+      status: "COMPLETED",
+      role: {
+        in: ["USER", "ASSISTANT"],
+      },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: Math.max(1, Math.min(100, limit)),
+    select: {
+      role: true,
+      content: true,
+    },
+  });
+
+  return rows
+    .reverse()
+    .map((item) => ({
+      role: item.role === "USER" ? "user" : "assistant",
+      content: String(item.content || "").trim(),
+    }))
+    .filter((item) => item.content.length > 0);
 }
 
 async function resolveConversationId(input: {
@@ -209,6 +236,7 @@ export async function POST(request: Request) {
       skillId: parsed.data.skillId,
     });
     const userMessageId = savedUserMessage.id;
+    const shortTermMessages = await loadShortTermMemoryMessages(conversationId, 20);
 
     const encoder = new TextEncoder();
 
@@ -231,7 +259,7 @@ export async function POST(request: Request) {
           const result = await runQaSkillStream(
             {
               mode: parsed.data.mode,
-              messages: parsed.data.messages,
+              messages: shortTermMessages.length > 0 ? shortTermMessages : parsed.data.messages,
               skillId: parsed.data.skillId,
             },
             {

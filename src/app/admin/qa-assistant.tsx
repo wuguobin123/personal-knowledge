@@ -78,6 +78,28 @@ type QaMcpModule = {
   isEnabled: boolean;
 };
 
+type QaSessionSummary = {
+  id: number;
+  title: string;
+  status: "active" | "archived" | "deleted";
+  mode: QaMode;
+  skillId: QaSkillId;
+  messageCount: number;
+  lastMessageAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type QaPersistedMessage = {
+  id: number;
+  role: "USER" | "ASSISTANT" | "SYSTEM" | "TOOL";
+  status: "COMPLETED" | "ERROR";
+  content: string;
+  reasoning: string | null;
+  createdAt: string;
+  meta?: unknown;
+};
+
 function createInitialMessage(): UiMessage {
   return {
     id: `assistant-initial-${Date.now()}`,
@@ -260,6 +282,85 @@ function parseHeadersText(raw: string) {
   return headers;
 }
 
+function normalizeQaMode(mode: unknown): QaMode {
+  if (mode === "blog" || mode === "web" || mode === "auto") {
+    return mode;
+  }
+  return "auto";
+}
+
+function normalizeReferences(raw: unknown): QaReference[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+      const data = item as Record<string, unknown>;
+      const id = Number(data.id);
+      const title = typeof data.title === "string" ? data.title.trim() : "";
+      const slug = typeof data.slug === "string" ? data.slug.trim() : "";
+      const publishedAt = typeof data.publishedAt === "string" ? data.publishedAt : "";
+      if (!Number.isInteger(id) || !title || !slug || !publishedAt) return null;
+      return { id, title, slug, publishedAt } satisfies QaReference;
+    })
+    .filter((item): item is QaReference => Boolean(item));
+}
+
+function normalizeStreamMeta(raw: unknown): StreamMetaPayload | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const data = raw as Record<string, unknown>;
+  const route = data.route === "domain" ? "domain" : "general";
+  const reason = typeof data.reason === "string" ? data.reason : "";
+  const references = normalizeReferences(data.references);
+  return {
+    route,
+    reason,
+    references,
+    ...(typeof data.skillId === "string" ? { skillId: data.skillId } : {}),
+    ...(typeof data.skillLabel === "string" ? { skillLabel: data.skillLabel } : {}),
+    ...(typeof data.skillDescription === "string"
+      ? { skillDescription: data.skillDescription }
+      : {}),
+    ...(typeof data.mcpUsed === "boolean" ? { mcpUsed: data.mcpUsed } : {}),
+    ...(typeof data.mcpModuleKey === "string" ? { mcpModuleKey: data.mcpModuleKey } : {}),
+    ...(typeof data.mcpModuleLabel === "string" ? { mcpModuleLabel: data.mcpModuleLabel } : {}),
+    ...(typeof data.mcpToolName === "string" ? { mcpToolName: data.mcpToolName } : {}),
+    ...(typeof data.mcpReason === "string" ? { mcpReason: data.mcpReason } : {}),
+    ...(typeof data.mcpError === "string" ? { mcpError: data.mcpError } : {}),
+  };
+}
+
+function toUiMessageFromPersisted(item: QaPersistedMessage): UiMessage | null {
+  const createdAt = Number(new Date(item.createdAt).getTime());
+  const timestamp = Number.isFinite(createdAt) ? createdAt : Date.now();
+
+  if (item.role === "USER") {
+    return {
+      id: `db-user-${item.id}`,
+      role: "user",
+      content: item.content,
+      createdAt: timestamp,
+    };
+  }
+
+  if (item.role !== "ASSISTANT") {
+    return null;
+  }
+
+  const meta = normalizeStreamMeta(item.meta);
+  const thinking = String(item.reasoning || "");
+  const finalAnswer = String(item.content || "");
+  const base = buildAssistantContent(thinking, finalAnswer);
+  const content = appendReferencesToContent(base, meta?.references || []);
+
+  return {
+    id: `db-assistant-${item.id}`,
+    role: "assistant",
+    content,
+    createdAt: timestamp,
+    meta,
+  };
+}
+
 function getMcpStatus(meta?: StreamMetaPayload | null) {
   if (!meta) return null;
 
@@ -346,6 +447,7 @@ export default function QaAssistant() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [qaSessionId, setQaSessionId] = useState<number | null>(null);
+  const [sessionHydrating, setSessionHydrating] = useState(false);
   const [sessionCreating, setSessionCreating] = useState(false);
   const [sessionError, setSessionError] = useState("");
   const [mode, setMode] = useState<QaMode>("auto");
@@ -401,6 +503,10 @@ export default function QaAssistant() {
   }, []);
 
   useEffect(() => {
+    void hydrateLatestSession();
+  }, []);
+
+  useEffect(() => {
     if (!showSkillManager) return;
 
     function onKeyDown(event: globalThis.KeyboardEvent) {
@@ -429,6 +535,69 @@ export default function QaAssistant() {
   function applySelectedSkill(skill: QaSkillOption) {
     setSkillId(skill.id);
     setSelectedSkill(skill);
+  }
+
+  useEffect(() => {
+    const matched = skills.find((item) => item.id === skillId);
+    if (matched) {
+      setSelectedSkill(matched);
+    }
+  }, [skills, skillId]);
+
+  async function hydrateLatestSession() {
+    setSessionHydrating(true);
+    setSessionError("");
+
+    try {
+      const sessionResponse = await fetch("/api/admin/qa/sessions?limit=1", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!sessionResponse.ok) {
+        throw new Error(await parseApiError(sessionResponse, "Failed to load latest session."));
+      }
+
+      const sessionPayload = (await sessionResponse.json()) as { sessions?: QaSessionSummary[] };
+      const latest = Array.isArray(sessionPayload.sessions) ? sessionPayload.sessions[0] : null;
+      if (!latest || !Number.isInteger(latest.id) || latest.id <= 0) {
+        setQaSessionId(null);
+        setMessages([createInitialMessage()]);
+        return;
+      }
+
+      setQaSessionId(latest.id);
+      setMode(normalizeQaMode(latest.mode));
+      if (typeof latest.skillId === "string" && latest.skillId.trim()) {
+        setSkillId(latest.skillId);
+      }
+
+      const messageResponse = await fetch(
+        `/api/admin/qa/sessions/messages?sessionId=${latest.id}&limit=300`,
+        {
+          method: "GET",
+          cache: "no-store",
+        },
+      );
+      if (!messageResponse.ok) {
+        throw new Error(await parseApiError(messageResponse, "Failed to load session messages."));
+      }
+
+      const messagePayload = (await messageResponse.json()) as { messages?: QaPersistedMessage[] };
+      const restored = (Array.isArray(messagePayload.messages) ? messagePayload.messages : [])
+        .map(toUiMessageFromPersisted)
+        .filter((item): item is UiMessage => Boolean(item));
+
+      setMessages(restored.length > 0 ? restored : [createInitialMessage()]);
+      setError("");
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error ? requestError.message : "Failed to restore latest session.";
+      setSessionError(message);
+      setQaSessionId(null);
+      setMessages([createInitialMessage()]);
+    } finally {
+      setSessionHydrating(false);
+    }
   }
 
   async function createQaSession(options: {
@@ -790,7 +959,7 @@ export default function QaAssistant() {
 
   async function sendMessage(rawText: string) {
     const content = rawText.trim();
-    if (!content || loading || sessionCreating) return;
+    if (!content || loading || sessionCreating || sessionHydrating) return;
 
     let activeSessionId = qaSessionId;
     if (!activeSessionId) {
@@ -1017,7 +1186,11 @@ export default function QaAssistant() {
           <span />
           <p className="admin-assistant-skill-desc">{selectedSkill.description}</p>
           <p className="admin-assistant-skill-desc">
-            {qaSessionId ? `当前会话 ID: ${qaSessionId}` : "当前还未创建会话"}
+            {sessionHydrating
+              ? "会话恢复中..."
+              : qaSessionId
+                ? `当前会话 ID: ${qaSessionId}`
+                : "当前还未创建会话"}
           </p>
         </div>
         <div className="admin-assistant-top-actions">
@@ -1026,7 +1199,7 @@ export default function QaAssistant() {
             onClick={() => {
               void createQaSession();
             }}
-            disabled={loading || sessionCreating}
+            disabled={loading || sessionCreating || sessionHydrating}
           >
             {sessionCreating ? "创建中..." : "新建会话"}
           </button>
@@ -1498,7 +1671,7 @@ export default function QaAssistant() {
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={loading || sessionCreating}
+            disabled={loading || sessionCreating || sessionHydrating}
           />
           <div className="admin-assistant-compose-row">
             <div className="admin-assistant-compose-tools">
@@ -1506,7 +1679,7 @@ export default function QaAssistant() {
                 type="button"
                 className={mode === "blog" ? "is-active" : undefined}
                 onClick={() => setMode("blog")}
-                disabled={loading || sessionCreating}
+                disabled={loading || sessionCreating || sessionHydrating}
               >
                 Blog
               </button>
@@ -1514,7 +1687,7 @@ export default function QaAssistant() {
                 type="button"
                 className={mode === "web" ? "is-active" : undefined}
                 onClick={() => setMode("web")}
-                disabled={loading || sessionCreating}
+                disabled={loading || sessionCreating || sessionHydrating}
               >
                 Web
               </button>
@@ -1522,7 +1695,7 @@ export default function QaAssistant() {
                 type="button"
                 className={mode === "auto" ? "is-active" : undefined}
                 onClick={() => setMode("auto")}
-                disabled={loading || sessionCreating}
+                disabled={loading || sessionCreating || sessionHydrating}
               >
                 Auto
               </button>
@@ -1533,7 +1706,11 @@ export default function QaAssistant() {
             </div>
             <div className="admin-assistant-compose-send">
               <span>Enter 发送 / Shift + Enter 换行</span>
-              <button type="button" onClick={() => void sendMessage(input)} disabled={loading || sessionCreating}>
+              <button
+                type="button"
+                onClick={() => void sendMessage(input)}
+                disabled={loading || sessionCreating || sessionHydrating}
+              >
                 {loading ? "Sending..." : "Send"}
               </button>
             </div>
@@ -1545,7 +1722,7 @@ export default function QaAssistant() {
               key={shortcut}
               type="button"
               onClick={() => void sendMessage(shortcut)}
-              disabled={loading || sessionCreating}
+              disabled={loading || sessionCreating || sessionHydrating}
             >
               {shortcut}
             </button>

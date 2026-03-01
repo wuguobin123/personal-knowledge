@@ -89,6 +89,58 @@ model QaMcpModule {
   @@index([isEnabled, createdAt])
 }
 
+model QaConversation {
+  id            Int                     @id @default(autoincrement())
+  userId        String                  @db.VarChar(120)
+  title         String                  @db.VarChar(200)
+  status        QaConversationStatus    @default(ACTIVE)
+  mode          QaSkillMode             @default(AUTO)
+  skillId       String                  @default("none") @db.VarChar(120)
+  meta          Json?
+  messageCount  Int                     @default(0)
+  lastMessageAt DateTime                @default(now())
+  archivedAt    DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  messages      QaConversationMessage[]
+
+  @@index([userId, status, lastMessageAt])
+  @@index([status, lastMessageAt])
+  @@index([createdAt])
+}
+
+model QaConversationMessage {
+  id             Int                       @id @default(autoincrement())
+  conversationId Int
+  parentMessageId Int?
+  userId         String                    @db.VarChar(120)
+  role           QaConversationMessageRole
+  status         QaConversationMessageStatus @default(COMPLETED)
+  content        String                    @db.LongText
+  mode           QaSkillMode               @default(AUTO)
+  skillId        String                    @default("none") @db.VarChar(120)
+  provider       String?                   @db.VarChar(80)
+  model          String?                   @db.VarChar(160)
+  finishReason   String?                   @db.VarChar(80)
+  promptTokens   Int?
+  completionTokens Int?
+  totalTokens    Int?
+  latencyMs      Int?
+  errorMessage   String?                   @db.VarChar(1000)
+  meta           Json?
+  createdAt      DateTime                  @default(now())
+  conversation   QaConversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parentMessage  QaConversationMessage?    @relation("QaConversationMessageParent", fields: [parentMessageId], references: [id], onDelete: SetNull)
+  childMessages  QaConversationMessage[]   @relation("QaConversationMessageParent")
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, role, createdAt])
+  @@index([conversationId, status, createdAt])
+  @@index([userId, createdAt])
+  @@index([parentMessageId])
+}
+
 enum ArticleSourceType {
   ORIGINAL
   CRAWLER
@@ -114,4 +166,22 @@ enum QaSkillSource {
 
 enum QaMcpTransport {
   STREAMABLE_HTTP
+}
+
+enum QaConversationMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+enum QaConversationStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
+enum QaConversationMessageStatus {
+  COMPLETED
+  ERROR
 }

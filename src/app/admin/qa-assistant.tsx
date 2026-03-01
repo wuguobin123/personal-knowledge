@@ -78,13 +78,15 @@ type QaMcpModule = {
   isEnabled: boolean;
 };
 
-const INITIAL_MESSAGE: UiMessage = {
-  id: "assistant-initial",
-  role: "assistant",
-  content:
-    "你好，我是多 Agent 问答助手。你可以问我写作、SEO、博客内容优化，或一般技术问题。",
-  createdAt: Date.now(),
-};
+function createInitialMessage(): UiMessage {
+  return {
+    id: `assistant-initial-${Date.now()}`,
+    role: "assistant",
+    content:
+      "你好，我是多 Agent 问答助手。你可以问我写作、SEO、博客内容优化，或一般技术问题。",
+    createdAt: Date.now(),
+  };
+}
 
 const SHORTCUTS = [
   "请根据我最近的文章风格，生成一段 120 字的开场引言。",
@@ -339,10 +341,13 @@ function AssistantMessage({
 export default function QaAssistant() {
   const SKILL_PAGE_SIZE = 8;
   const feedRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState<UiMessage[]>([INITIAL_MESSAGE]);
+  const [messages, setMessages] = useState<UiMessage[]>([createInitialMessage()]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [qaSessionId, setQaSessionId] = useState<number | null>(null);
+  const [sessionCreating, setSessionCreating] = useState(false);
+  const [sessionError, setSessionError] = useState("");
   const [mode, setMode] = useState<QaMode>("auto");
   const [skills, setSkills] = useState<QaSkillOption[]>([...DEFAULT_QA_SKILLS]);
   const [selectedSkill, setSelectedSkill] = useState<QaSkillOption>(DEFAULT_QA_SKILLS[0]);
@@ -424,6 +429,57 @@ export default function QaAssistant() {
   function applySelectedSkill(skill: QaSkillOption) {
     setSkillId(skill.id);
     setSelectedSkill(skill);
+  }
+
+  async function createQaSession(options: {
+    title?: string;
+    resetMessages?: boolean;
+    silent?: boolean;
+  } = {}) {
+    if (sessionCreating) {
+      return qaSessionId;
+    }
+
+    const resetMessages = options.resetMessages ?? true;
+    setSessionCreating(true);
+    if (!options.silent) {
+      setSessionError("");
+    }
+
+    try {
+      const response = await fetch("/api/admin/qa/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: options.title,
+          mode,
+          skillId,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, "Failed to create session."));
+      }
+
+      const payload = (await response.json()) as { session?: { id?: number } };
+      const nextId = Number(payload.session?.id);
+      if (!Number.isInteger(nextId) || nextId <= 0) {
+        throw new Error("Session response is invalid.");
+      }
+
+      setQaSessionId(nextId);
+      setSessionError("");
+      if (resetMessages) {
+        setMessages([createInitialMessage()]);
+        setError("");
+      }
+      return nextId;
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "Failed to create session.";
+      setSessionError(message);
+      return null;
+    } finally {
+      setSessionCreating(false);
+    }
   }
 
   async function loadSkills(
@@ -734,7 +790,19 @@ export default function QaAssistant() {
 
   async function sendMessage(rawText: string) {
     const content = rawText.trim();
-    if (!content || loading) return;
+    if (!content || loading || sessionCreating) return;
+
+    let activeSessionId = qaSessionId;
+    if (!activeSessionId) {
+      activeSessionId = await createQaSession({
+        title: content.slice(0, 80),
+        resetMessages: false,
+      });
+      if (!activeSessionId) {
+        setError("会话创建失败，请稍后重试。");
+        return;
+      }
+    }
 
     const userMessage: UiMessage = {
       id: messageId("user"),
@@ -762,6 +830,7 @@ export default function QaAssistant() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          sessionId: activeSessionId,
           mode,
           skillId,
           messages: normalizeForApi(requestMessages),
@@ -782,6 +851,11 @@ export default function QaAssistant() {
 
       if (!response.body) {
         throw new Error("AI stream is unavailable.");
+      }
+
+      const sessionIdFromHeader = Number(response.headers.get("x-qa-session-id") || "");
+      if (Number.isInteger(sessionIdFromHeader) && sessionIdFromHeader > 0) {
+        setQaSessionId(sessionIdFromHeader);
       }
 
       const reader = response.body.getReader();
@@ -942,8 +1016,20 @@ export default function QaAssistant() {
           <h2>Multi-Agent Q&A Assistant</h2>
           <span />
           <p className="admin-assistant-skill-desc">{selectedSkill.description}</p>
+          <p className="admin-assistant-skill-desc">
+            {qaSessionId ? `当前会话 ID: ${qaSessionId}` : "当前还未创建会话"}
+          </p>
         </div>
         <div className="admin-assistant-top-actions">
+          <button
+            type="button"
+            onClick={() => {
+              void createQaSession();
+            }}
+            disabled={loading || sessionCreating}
+          >
+            {sessionCreating ? "创建中..." : "新建会话"}
+          </button>
           <button type="button" onClick={() => openSkillModal("select")} disabled={loading}>
             选择 Skill
           </button>
@@ -956,6 +1042,7 @@ export default function QaAssistant() {
           </button>
         </div>
       </header>
+      {sessionError ? <p className="admin-assistant-skill-error">会话错误：{sessionError}</p> : null}
       {skillError ? <p className="admin-assistant-skill-error">Skill 加载失败：{skillError}</p> : null}
 
       {showSkillManager ? (
@@ -1411,7 +1498,7 @@ export default function QaAssistant() {
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={loading}
+            disabled={loading || sessionCreating}
           />
           <div className="admin-assistant-compose-row">
             <div className="admin-assistant-compose-tools">
@@ -1419,7 +1506,7 @@ export default function QaAssistant() {
                 type="button"
                 className={mode === "blog" ? "is-active" : undefined}
                 onClick={() => setMode("blog")}
-                disabled={loading}
+                disabled={loading || sessionCreating}
               >
                 Blog
               </button>
@@ -1427,7 +1514,7 @@ export default function QaAssistant() {
                 type="button"
                 className={mode === "web" ? "is-active" : undefined}
                 onClick={() => setMode("web")}
-                disabled={loading}
+                disabled={loading || sessionCreating}
               >
                 Web
               </button>
@@ -1435,7 +1522,7 @@ export default function QaAssistant() {
                 type="button"
                 className={mode === "auto" ? "is-active" : undefined}
                 onClick={() => setMode("auto")}
-                disabled={loading}
+                disabled={loading || sessionCreating}
               >
                 Auto
               </button>
@@ -1446,7 +1533,7 @@ export default function QaAssistant() {
             </div>
             <div className="admin-assistant-compose-send">
               <span>Enter 发送 / Shift + Enter 换行</span>
-              <button type="button" onClick={() => void sendMessage(input)} disabled={loading}>
+              <button type="button" onClick={() => void sendMessage(input)} disabled={loading || sessionCreating}>
                 {loading ? "Sending..." : "Send"}
               </button>
             </div>
@@ -1454,7 +1541,12 @@ export default function QaAssistant() {
         </div>
         <div className="admin-assistant-shortcuts">
           {SHORTCUTS.map((shortcut) => (
-            <button key={shortcut} type="button" onClick={() => void sendMessage(shortcut)} disabled={loading}>
+            <button
+              key={shortcut}
+              type="button"
+              onClick={() => void sendMessage(shortcut)}
+              disabled={loading || sessionCreating}
+            >
               {shortcut}
             </button>
           ))}

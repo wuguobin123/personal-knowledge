@@ -2,6 +2,11 @@
 
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import MarkdownRenderer from "@/components/markdown-renderer";
+import {
+  DEFAULT_QA_SKILL_ID,
+  listQaSkills,
+  type QaSkillId,
+} from "@/lib/qa/skills-catalog";
 
 type UiRole = "user" | "assistant";
 type QaMode = "auto" | "blog" | "web";
@@ -24,6 +29,9 @@ type StreamMetaPayload = {
   route: "domain" | "general";
   reason: string;
   references: QaReference[];
+  skillId?: QaSkillId;
+  skillLabel?: string;
+  skillDescription?: string;
 };
 
 type StreamDonePayload = StreamMetaPayload & {
@@ -49,6 +57,7 @@ const SHORTCUTS = [
   "帮我检查下面这段内容的语法和可读性。",
   "基于我的博客内容，给出 5 个可写的新选题。",
 ];
+const QA_SKILLS = listQaSkills();
 
 function messageId(role: UiRole) {
   return `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -207,12 +216,11 @@ export default function QaAssistant() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<QaMode>("auto");
-
-  const modeTitle = useMemo(() => {
-    if (mode === "blog") return "Blog Context";
-    if (mode === "web") return "Web Search";
-    return "Auto";
-  }, [mode]);
+  const [skillId] = useState<QaSkillId>(DEFAULT_QA_SKILL_ID);
+  const selectedSkill = useMemo(
+    () => QA_SKILLS.find((item) => item.id === skillId) || QA_SKILLS[0],
+    [skillId],
+  );
 
   useEffect(() => {
     const node = feedRef.current;
@@ -256,6 +264,7 @@ export default function QaAssistant() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode,
+          skillId,
           messages: normalizeForApi(requestMessages),
         }),
       });
@@ -391,51 +400,6 @@ export default function QaAssistant() {
       <header className="admin-assistant-topbar">
         <div className="admin-assistant-topic">
           <h2>Multi-Agent Q&A Assistant</h2>
-          <span>Mode: {modeTitle}</span>
-          <div className="admin-assistant-mode-switch">
-            <button
-              type="button"
-              className={mode === "auto" ? "is-active" : undefined}
-              onClick={() => setMode("auto")}
-            >
-              Auto
-            </button>
-            <button
-              type="button"
-              className={mode === "blog" ? "is-active" : undefined}
-              onClick={() => setMode("blog")}
-            >
-              Blog Context
-            </button>
-            <button
-              type="button"
-              className={mode === "web" ? "is-active" : undefined}
-              onClick={() => setMode("web")}
-            >
-              Web Search
-            </button>
-          </div>
-        </div>
-        <div className="admin-assistant-top-actions">
-          <button
-            type="button"
-            onClick={() => {
-              setMessages([INITIAL_MESSAGE]);
-              setError("");
-            }}
-          >
-            New Chat
-          </button>
-          <button
-            type="button"
-            aria-label="Clear input"
-            onClick={() => {
-              setInput("");
-              setError("");
-            }}
-          >
-            Clear
-          </button>
         </div>
       </header>
 
@@ -499,6 +463,7 @@ export default function QaAssistant() {
               <button type="button" onClick={() => setMode("auto")} disabled={loading}>
                 Auto
               </button>
+              <span className="admin-assistant-skill-tag">Skill: {selectedSkill.label}</span>
             </div>
             <div className="admin-assistant-compose-send">
               <span>Enter 发送 / Shift + Enter 换行</span>

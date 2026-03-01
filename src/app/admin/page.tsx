@@ -69,6 +69,7 @@ const TABLE_IMAGES = [
 ];
 
 const AI_NEWS_PAGE_SIZE = 10;
+const ARTICLE_PAGE_SIZE = 4;
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("en-US", {
@@ -203,6 +204,14 @@ function buildAiNewsHref(page: number, newsId?: number) {
   return `/admin?${params.toString()}`;
 }
 
+function buildArticleListHref(page: number) {
+  const params = new URLSearchParams({
+    view: "list",
+    page: String(page),
+  });
+  return `/admin?${params.toString()}`;
+}
+
 function buildPageNumbers(current: number, total: number) {
   if (total <= 7) {
     return Array.from({ length: total }, (_, idx) => idx + 1);
@@ -268,9 +277,12 @@ export default async function AdminPage({ searchParams }: Props) {
   const view = normalizeView(viewParam);
   const selectedNewsId = view === "ainews" ? parsePositiveInt(newsIdParam) : null;
   const requestedAiNewsPage = view === "ainews" ? parsePositiveInt(pageParam) ?? 1 : 1;
+  const requestedArticlePage = view === "list" ? parsePositiveInt(pageParam) ?? 1 : 1;
 
   let articles: ArticleRow[] = [];
   let articleTotalCount = 0;
+  let articlePage = requestedArticlePage;
+  let articleTotalPages = 1;
   let publishedCount = 0;
   let aiNews: AiNewsRow[] = [];
   let aiNewsTotalCount = 0;
@@ -279,21 +291,28 @@ export default async function AdminPage({ searchParams }: Props) {
   let selectedNews: AiNewsDetail | null = null;
 
   if (view === "list") {
-    [articles, articleTotalCount, publishedCount] = await Promise.all([
-      prisma.article.findMany({
-        orderBy: { publishedAt: "desc" },
-        select: {
-          id: true,
-          title: true,
-          slug: true,
-          category: true,
-          publishedAt: true,
-          published: true,
-        },
-      }),
+    [articleTotalCount, publishedCount] = await Promise.all([
       prisma.article.count(),
       prisma.article.count({ where: { published: true } }),
     ]);
+
+    articleTotalPages = Math.max(1, Math.ceil(articleTotalCount / ARTICLE_PAGE_SIZE));
+    articlePage = Math.min(requestedArticlePage, articleTotalPages);
+    const articleOffset = (articlePage - 1) * ARTICLE_PAGE_SIZE;
+
+    articles = await prisma.article.findMany({
+      orderBy: { publishedAt: "desc" },
+      skip: articleOffset,
+      take: ARTICLE_PAGE_SIZE,
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        category: true,
+        publishedAt: true,
+        published: true,
+      },
+    });
   }
   if (view === "ainews") {
     const aiNewsDelegate = (
@@ -396,10 +415,12 @@ export default async function AdminPage({ searchParams }: Props) {
     }
   }
 
-  const pageSize = 4;
-  const articleRows = articles.slice(0, pageSize);
+  const articleRows = articles;
   const aiNewsRows = aiNews;
-  const articleShownEnd = Math.min(pageSize, articleTotalCount);
+  const articleOffset = (articlePage - 1) * ARTICLE_PAGE_SIZE;
+  const articleShownStart = articleTotalCount > 0 ? articleOffset + 1 : 0;
+  const articleShownEnd = articleTotalCount > 0 ? Math.min(articleOffset + articleRows.length, articleTotalCount) : 0;
+  const articlePageNumbers = buildPageNumbers(articlePage, articleTotalPages);
   const aiNewsOffset = (aiNewsPage - 1) * AI_NEWS_PAGE_SIZE;
   const aiNewsShownStart = aiNewsTotalCount > 0 ? aiNewsOffset + 1 : 0;
   const aiNewsShownEnd = aiNewsTotalCount > 0 ? Math.min(aiNewsOffset + aiNewsRows.length, aiNewsTotalCount) : 0;
@@ -555,19 +576,35 @@ export default async function AdminPage({ searchParams }: Props) {
 
                   <div className="admin-dash-pagination">
                     <p>
-                      Showing <strong>{articleTotalCount > 0 ? 1 : 0}</strong> to{" "}
+                      Showing <strong>{articleShownStart}</strong> to{" "}
                       <strong>{articleShownEnd}</strong> of <strong>{articleTotalCount}</strong> results
                     </p>
                     <div>
-                      <button type="button" disabled>
-                        {"<"}
-                      </button>
-                      <button type="button" className="is-active">
-                        1
-                      </button>
-                      <button type="button">2</button>
-                      <button type="button">3</button>
-                      <button type="button">{">"}</button>
+                      {articlePage > 1 ? (
+                        <Link href={buildArticleListHref(articlePage - 1)}>{"<"}</Link>
+                      ) : (
+                        <span className="is-disabled">{"<"}</span>
+                      )}
+                      {articlePageNumbers.map((page) =>
+                        page > 0 ? (
+                          <Link
+                            key={page}
+                            href={buildArticleListHref(page)}
+                            className={page === articlePage ? "is-active" : undefined}
+                          >
+                            {page}
+                          </Link>
+                        ) : (
+                          <span key={`ellipsis-${page}`} className="is-disabled">
+                            ...
+                          </span>
+                        )
+                      )}
+                      {articlePage < articleTotalPages ? (
+                        <Link href={buildArticleListHref(articlePage + 1)}>{">"}</Link>
+                      ) : (
+                        <span className="is-disabled">{">"}</span>
+                      )}
                     </div>
                   </div>
                 </section>

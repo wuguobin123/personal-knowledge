@@ -27,7 +27,6 @@ type DraftState = {
   category: string;
   tags: string[];
   content: string;
-  heroImageUrl: string;
 };
 
 const DEFAULT_DRAFT: DraftState = {
@@ -37,7 +36,6 @@ const DEFAULT_DRAFT: DraftState = {
   category: "Technology",
   tags: ["AI", "Future"],
   content: "",
-  heroImageUrl: "",
 };
 
 const RELATED_NEWS = [
@@ -90,8 +88,6 @@ function normalizeSelectionText(value: string) {
 export default function AdminEditor({ username = "admin", embedded = false }: AdminEditorProps) {
   const router = useRouter();
   const editorRef = useRef<HTMLTextAreaElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const heroInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(DEFAULT_DRAFT.title);
   const [articleId, setArticleId] = useState<number | null>(DEFAULT_DRAFT.articleId);
   const [slug, setSlug] = useState(DEFAULT_DRAFT.slug);
@@ -100,14 +96,11 @@ export default function AdminEditor({ username = "admin", embedded = false }: Ad
   const [tags, setTags] = useState<string[]>(DEFAULT_DRAFT.tags);
   const [tagInput, setTagInput] = useState("");
   const [content, setContent] = useState(DEFAULT_DRAFT.content);
-  const [heroImageUrl, setHeroImageUrl] = useState(DEFAULT_DRAFT.heroImageUrl);
   const [schedulePost, setSchedulePost] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [assistOpen, setAssistOpen] = useState(false);
   const [savedAt, setSavedAt] = useState("14:23");
   const [submittingMode, setSubmittingMode] = useState<SubmitMode>(null);
-  const [uploadingHero, setUploadingHero] = useState(false);
-  const [uploadingInline, setUploadingInline] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<PublishResult | null>(null);
   const [newsItems, setNewsItems] = useState(RELATED_NEWS);
@@ -126,7 +119,6 @@ export default function AdminEditor({ username = "admin", embedded = false }: Ad
       if (parsed.category) setCategory(parsed.category);
       if (Array.isArray(parsed.tags)) setTags(parsed.tags.filter(Boolean).slice(0, 12));
       if (parsed.content) setContent(parsed.content);
-      if (parsed.heroImageUrl) setHeroImageUrl(parsed.heroImageUrl);
     } catch {
       localStorage.removeItem(LOCAL_DRAFT_KEY);
     }
@@ -139,12 +131,12 @@ export default function AdminEditor({ username = "admin", embedded = false }: Ad
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const draft: DraftState = { articleId, title, slug, category, tags, content, heroImageUrl };
+      const draft: DraftState = { articleId, title, slug, category, tags, content };
       localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify(draft));
       setSavedAt(nowTimeLabel());
     }, 600);
     return () => window.clearTimeout(timer);
-  }, [articleId, title, slug, category, tags, content, heroImageUrl]);
+  }, [articleId, title, slug, category, tags, content]);
 
   function focusEditorAt(start: number, end: number) {
     requestAnimationFrame(() => {
@@ -238,47 +230,6 @@ export default function AdminEditor({ username = "admin", embedded = false }: Ad
 
   function removeTag(tag: string) {
     setTags((prev) => prev.filter((item) => item !== tag));
-  }
-
-  async function uploadImage(file: File) {
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await fetch("/api/admin/upload", { method: "POST", body: formData });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Upload failed");
-    }
-    return String(data.url || "");
-  }
-
-  async function handleHeroFile(file: File) {
-    setUploadingHero(true);
-    setError("");
-    try {
-      const url = await uploadImage(file);
-      setHeroImageUrl(url);
-    } catch (uploadError) {
-      const message = uploadError instanceof Error ? uploadError.message : "Upload failed";
-      setError(message);
-    } finally {
-      setUploadingHero(false);
-    }
-  }
-
-  async function handleInlineImage(file: File) {
-    setUploadingInline(true);
-    setError("");
-    try {
-      const url = await uploadImage(file);
-      replaceSelection(() => ({
-        replacement: `\n\n![${file.name}](${url})\n\n`,
-      }));
-    } catch (uploadError) {
-      const message = uploadError instanceof Error ? uploadError.message : "Upload failed";
-      setError(message);
-    } finally {
-      setUploadingInline(false);
-    }
   }
 
   async function submitArticle(mode: SubmitMode) {
@@ -389,30 +340,6 @@ export default function AdminEditor({ username = "admin", embedded = false }: Ad
 
       <form className="admin-write-layout" onSubmit={handleEditorSubmit}>
         <section className="admin-write-main">
-          <button
-            className="admin-write-hero"
-            type="button"
-            onClick={() => heroInputRef.current?.click()}
-            disabled={uploadingHero}
-          >
-            {heroImageUrl ? <img src={heroImageUrl} alt="Featured" /> : null}
-            <div className="admin-write-hero-overlay">
-              <p>{uploadingHero ? "Uploading image..." : "Upload Featured Image"}</p>
-              <small>Recommended size: 1200x630px</small>
-            </div>
-          </button>
-          <input
-            ref={heroInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            hidden
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleHeroFile(file);
-              event.currentTarget.value = "";
-            }}
-          />
-
           <textarea
             className="admin-write-title"
             placeholder="Enter your story title..."
@@ -445,9 +372,6 @@ export default function AdminEditor({ username = "admin", embedded = false }: Ad
             </button>
             <button type="button" onClick={() => wrapSelection("[", "](https://example.com)", "link text")}>
               Link
-            </button>
-            <button type="button" onClick={() => imageInputRef.current?.click()} disabled={uploadingInline}>
-              {uploadingInline ? "..." : "Image"}
             </button>
             <button type="button" onClick={() => prefixSelectedLines("- ")}>
               List
@@ -488,17 +412,6 @@ export default function AdminEditor({ username = "admin", embedded = false }: Ad
             placeholder="Start writing your masterpiece here..."
             value={content}
             onChange={(event) => setContent(event.target.value)}
-          />
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            hidden
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleInlineImage(file);
-              event.currentTarget.value = "";
-            }}
           />
         </section>
 
@@ -607,7 +520,6 @@ export default function AdminEditor({ username = "admin", embedded = false }: Ad
               </button>
             </div>
             <div className="admin-write-preview-content">
-              {heroImageUrl ? <img src={heroImageUrl} alt={previewTitle} /> : null}
               <h1>{previewTitle}</h1>
               <MarkdownRenderer content={previewMarkdown} />
             </div>

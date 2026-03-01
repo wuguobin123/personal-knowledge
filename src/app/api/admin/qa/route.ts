@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { getAdminSession } from "@/lib/auth";
-import { runQaMultiAgentStream } from "@/lib/qa/multi-agent";
+import { DEFAULT_QA_SKILL_ID, QA_SKILL_IDS } from "@/lib/qa/skills-catalog";
+import { runQaSkillStream } from "@/lib/qa/skills-runtime";
 
 export const runtime = "nodejs";
 
 const requestSchema = z.object({
   mode: z.enum(["auto", "blog", "web"]).optional().default("auto"),
+  skillId: z.enum(QA_SKILL_IDS).optional().default(DEFAULT_QA_SKILL_ID),
   messages: z
     .array(
       z.object({
@@ -49,10 +51,11 @@ export async function POST(request: Request) {
         }
 
         try {
-          const result = await runQaMultiAgentStream(
+          const result = await runQaSkillStream(
             {
               mode: parsed.data.mode,
               messages: parsed.data.messages,
+              skillId: parsed.data.skillId,
             },
             {
               signal: request.signal,

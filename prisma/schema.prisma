@@ -118,6 +118,7 @@ model QaConversationMessage {
   role           QaConversationMessageRole
   status         QaConversationMessageStatus @default(COMPLETED)
   content        String                    @db.LongText
+  reasoning      String?                   @db.LongText
   mode           QaSkillMode               @default(AUTO)
   skillId        String                    @default("none") @db.VarChar(120)
   provider       String?                   @db.VarChar(80)

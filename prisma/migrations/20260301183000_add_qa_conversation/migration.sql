@@ -27,6 +27,7 @@ CREATE TABLE `QaConversationMessage` (
   `role` ENUM('USER', 'ASSISTANT', 'SYSTEM', 'TOOL') NOT NULL,
   `status` ENUM('COMPLETED', 'ERROR') NOT NULL DEFAULT 'COMPLETED',
   `content` LONGTEXT NOT NULL,
+  `reasoning` LONGTEXT NULL,
   `mode` ENUM('AUTO', 'BLOG', 'WEB') NOT NULL DEFAULT 'AUTO',
   `skillId` VARCHAR(120) NOT NULL DEFAULT 'none',
   `provider` VARCHAR(80) NULL,

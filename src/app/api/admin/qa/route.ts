@@ -115,6 +115,7 @@ async function appendConversationMessage(input: {
   role: ConversationRole;
   status?: ConversationMessageStatus;
   content: string;
+  reasoning?: string | null;
   mode: RequestPayload["mode"];
   skillId: string;
   provider?: string | null;
@@ -137,6 +138,7 @@ async function appendConversationMessage(input: {
         role: input.role,
         status: input.status || "COMPLETED",
         content: input.content,
+        reasoning: input.reasoning ?? null,
         mode: toSkillMode(input.mode),
         skillId: input.skillId,
         provider: input.provider ?? null,
@@ -253,6 +255,7 @@ export async function POST(request: Request) {
             role: "ASSISTANT",
             status: "COMPLETED",
             content: result.answer,
+            reasoning: result.thinking || null,
             mode: parsed.data.mode,
             skillId: parsed.data.skillId,
             provider: getAssistantProvider(),
@@ -263,7 +266,6 @@ export async function POST(request: Request) {
               route: result.route,
               reason: result.reason,
               references: result.references,
-              thinking: result.thinking,
               skillId: result.skillId,
               skillLabel: result.skillLabel,
               skillDescription: result.skillDescription,

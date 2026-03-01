@@ -55,6 +55,32 @@ function toPrismaJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
+function isMissingReasoningColumnError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+
+  const data = error as {
+    message?: unknown;
+    code?: unknown;
+    meta?: unknown;
+  };
+  const text = String(data.message || "").toLowerCase();
+  const code = String(data.code || "").toUpperCase();
+  const metaColumn = String(
+    data.meta && typeof data.meta === "object" && "column" in data.meta
+      ? (data.meta as { column?: unknown }).column
+      : "",
+  ).toLowerCase();
+
+  if (code === "P2022" && metaColumn.includes("reasoning")) {
+    return true;
+  }
+
+  return (
+    text.includes("reasoning") &&
+    (text.includes("does not exist") || text.includes("unknown column") || text.includes("p2022"))
+  );
+}
+
 function pickLatestUserMessage(messages: RequestPayload["messages"]) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const item = messages[index];
@@ -160,29 +186,44 @@ async function appendConversationMessage(input: {
 }) {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
-    const created = await tx.qaConversationMessage.create({
-      data: {
-        conversationId: input.conversationId,
-        parentMessageId: input.parentMessageId ?? null,
-        userId: input.userId,
-        role: input.role,
-        status: input.status || "COMPLETED",
-        content: input.content,
-        reasoning: input.reasoning ?? null,
-        mode: toSkillMode(input.mode),
-        skillId: input.skillId,
-        provider: input.provider ?? null,
-        model: input.model ?? null,
-        finishReason: input.finishReason ?? null,
-        promptTokens: input.promptTokens ?? null,
-        completionTokens: input.completionTokens ?? null,
-        totalTokens: input.totalTokens ?? null,
-        latencyMs: input.latencyMs ?? null,
-        errorMessage: input.errorMessage ?? null,
-        ...(input.meta !== undefined ? { meta: input.meta } : {}),
-      },
-      select: { id: true },
-    });
+    const createData = {
+      conversationId: input.conversationId,
+      parentMessageId: input.parentMessageId ?? null,
+      userId: input.userId,
+      role: input.role,
+      status: input.status || "COMPLETED",
+      content: input.content,
+      reasoning: input.reasoning ?? null,
+      mode: toSkillMode(input.mode),
+      skillId: input.skillId,
+      provider: input.provider ?? null,
+      model: input.model ?? null,
+      finishReason: input.finishReason ?? null,
+      promptTokens: input.promptTokens ?? null,
+      completionTokens: input.completionTokens ?? null,
+      totalTokens: input.totalTokens ?? null,
+      latencyMs: input.latencyMs ?? null,
+      errorMessage: input.errorMessage ?? null,
+      ...(input.meta !== undefined ? { meta: input.meta } : {}),
+    };
+
+    let created;
+    try {
+      created = await tx.qaConversationMessage.create({
+        data: createData,
+        select: { id: true },
+      });
+    } catch (error) {
+      if (!isMissingReasoningColumnError(error)) {
+        throw error;
+      }
+
+      const { reasoning: _ignoreReasoning, ...fallbackData } = createData;
+      created = await tx.qaConversationMessage.create({
+        data: fallbackData,
+        select: { id: true },
+      });
+    }
 
     await tx.qaConversation.update({
       where: { id: input.conversationId },

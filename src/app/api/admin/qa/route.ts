@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { getAdminSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_QA_SKILL_ID } from "@/lib/qa/skills-catalog";
@@ -47,6 +48,10 @@ function getAssistantProvider() {
 
 function getAssistantModel() {
   return String(process.env.SILICONFLOW_MODEL || "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B").trim();
+}
+
+function toPrismaJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 function pickLatestUserMessage(messages: RequestPayload["messages"]) {
@@ -120,7 +125,7 @@ async function appendConversationMessage(input: {
   totalTokens?: number | null;
   latencyMs?: number | null;
   errorMessage?: string | null;
-  meta?: Record<string, unknown> | null;
+  meta?: Prisma.InputJsonValue;
 }) {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
@@ -142,7 +147,7 @@ async function appendConversationMessage(input: {
         totalTokens: input.totalTokens ?? null,
         latencyMs: input.latencyMs ?? null,
         errorMessage: input.errorMessage ?? null,
-        ...(input.meta ? { meta: input.meta } : {}),
+        ...(input.meta !== undefined ? { meta: input.meta } : {}),
       },
       select: { id: true },
     });
@@ -200,7 +205,6 @@ export async function POST(request: Request) {
       content: latestUserMessage.content,
       mode: parsed.data.mode,
       skillId: parsed.data.skillId,
-      meta: null,
     });
     const userMessageId = savedUserMessage.id;
 
@@ -255,7 +259,7 @@ export async function POST(request: Request) {
             model: getAssistantModel(),
             finishReason: "stop",
             latencyMs: Math.max(0, Date.now() - assistantStartedAt),
-            meta: {
+            meta: toPrismaJson({
               route: result.route,
               reason: result.reason,
               references: result.references,
@@ -269,7 +273,7 @@ export async function POST(request: Request) {
               mcpToolName: result.mcpToolName,
               mcpReason: result.mcpReason,
               mcpError: result.mcpError,
-            },
+            }),
           });
 
           push("done", result);
@@ -290,9 +294,9 @@ export async function POST(request: Request) {
               finishReason: "error",
               latencyMs: Math.max(0, Date.now() - assistantStartedAt),
               errorMessage: message.slice(0, 1000),
-              meta: {
+              meta: toPrismaJson({
                 error: true,
-              },
+              }),
             });
           } catch {
             // Ignore persistence errors to avoid breaking the SSE error response.

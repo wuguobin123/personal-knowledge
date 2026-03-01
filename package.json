@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:migrate": "prisma migrate deploy",
+    "db:migrate": "node scripts/prisma-migrate-safe.mjs",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.mjs",
     "ai-news:collect": "node scripts/collect-ai-news.mjs",

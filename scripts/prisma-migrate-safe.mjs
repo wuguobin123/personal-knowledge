@@ -51,6 +51,25 @@ function parseCreatedTables(sqlText) {
   return Array.from(names);
 }
 
+function parseAddedColumns(sqlText) {
+  const pairs = new Set();
+  const pattern =
+    /ALTER\s+TABLE\s+`?([A-Za-z0-9_]+)`?\s+ADD\s+COLUMN(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([A-Za-z0-9_]+)`?/gi;
+  let match = pattern.exec(sqlText);
+  while (match) {
+    const tableName = match[1];
+    const columnName = match[2];
+    if (tableName && columnName) {
+      pairs.add(`${tableName}.${columnName}`);
+    }
+    match = pattern.exec(sqlText);
+  }
+  return Array.from(pairs).map((item) => {
+    const [tableName, columnName] = item.split(".");
+    return { tableName, columnName };
+  });
+}
+
 function toNumber(value) {
   if (typeof value === "bigint") return Number(value);
   const parsed = Number(value);
@@ -63,6 +82,17 @@ async function doesTableExist(prisma, tableName) {
     FROM information_schema.TABLES
     WHERE TABLE_SCHEMA = DATABASE()
       AND TABLE_NAME = ${tableName}
+  `;
+  return toNumber(rows[0]?.total) > 0;
+}
+
+async function doesColumnExist(prisma, tableName, columnName) {
+  const rows = await prisma.$queryRaw`
+    SELECT COUNT(*) AS total
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ${tableName}
+      AND COLUMN_NAME = ${columnName}
   `;
   return toNumber(rows[0]?.total) > 0;
 }
@@ -105,32 +135,44 @@ async function inferResolveFlag(prisma, migrationName) {
 
   const sqlText = readFileSync(migrationFile, "utf8");
   const createdTables = parseCreatedTables(sqlText);
-  if (createdTables.length === 0) {
+  const addedColumns = parseAddedColumns(sqlText);
+
+  if (createdTables.length === 0 && addedColumns.length === 0) {
     return {
       flag: null,
-      reason: "no CREATE TABLE statements found, requires manual check",
+      reason: "no CREATE TABLE / ALTER TABLE ADD COLUMN statements found, requires manual check",
     };
   }
 
-  const checks = await Promise.all(
+  const tableChecks = await Promise.all(
     createdTables.map(async (tableName) => ({
-      tableName,
+      objectName: tableName,
       exists: await doesTableExist(prisma, tableName),
     })),
   );
+  const columnChecks = await Promise.all(
+    addedColumns.map(async ({ tableName, columnName }) => ({
+      objectName: `${tableName}.${columnName}`,
+      exists: await doesColumnExist(prisma, tableName, columnName),
+    })),
+  );
+  const checks = [...tableChecks, ...columnChecks];
 
   const existingCount = checks.filter((item) => item.exists).length;
   if (existingCount === checks.length) {
-    return { flag: "--applied", reason: `all created tables exist (${createdTables.join(", ")})` };
+    return {
+      flag: "--applied",
+      reason: `all detected objects exist (${checks.map((item) => item.objectName).join(", ")})`,
+    };
   }
   if (existingCount === 0) {
-    return { flag: "--rolled-back", reason: "none of the created tables exist" };
+    return { flag: "--rolled-back", reason: "none of the detected objects exist" };
   }
 
   return {
     flag: null,
     reason: `partial objects found (${checks
-      .map((item) => `${item.tableName}:${item.exists ? "exists" : "missing"}`)
+      .map((item) => `${item.objectName}:${item.exists ? "exists" : "missing"}`)
       .join(", ")})`,
   };
 }

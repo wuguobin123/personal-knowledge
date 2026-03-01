@@ -34,6 +34,12 @@ type StreamMetaPayload = {
   skillId?: QaSkillId;
   skillLabel?: string;
   skillDescription?: string;
+  mcpUsed?: boolean;
+  mcpModuleKey?: string;
+  mcpModuleLabel?: string;
+  mcpToolName?: string;
+  mcpReason?: string;
+  mcpError?: string;
 };
 
 type StreamDonePayload = StreamMetaPayload & {
@@ -55,6 +61,20 @@ type GithubSkillSearchItem = {
   language: string | null;
   topics: string[];
   htmlUrl: string;
+};
+
+type QaMcpModule = {
+  id: number;
+  moduleKey: string;
+  label: string;
+  description: string;
+  transport: "streamable_http";
+  endpointUrl: string;
+  keywordHints: string[];
+  toolAllowlist: string[];
+  headers: Record<string, string>;
+  modeHint: QaSkillModeHint;
+  isEnabled: boolean;
 };
 
 const INITIAL_MESSAGE: UiMessage = {
@@ -203,6 +223,40 @@ async function parseApiError(response: Response, fallback: string) {
   return fallback;
 }
 
+function parseDelimitedList(raw: string) {
+  return Array.from(
+    new Set(
+      String(raw || "")
+        .split(/[,\n]/g)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function parseHeadersText(raw: string) {
+  const text = String(raw || "").trim();
+  if (!text) {
+    return {} as Record<string, string>;
+  }
+
+  const parsed = parseJson<Record<string, unknown>>(text);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Headers 必须是 JSON 对象，例如 {\"Authorization\":\"Bearer xxx\"}");
+  }
+
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    const headerKey = String(key || "").trim();
+    if (!headerKey) continue;
+    if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") continue;
+    const headerValue = String(value).trim();
+    if (!headerValue) continue;
+    headers[headerKey] = headerValue;
+  }
+  return headers;
+}
+
 function AssistantMessage({ content }: { content: string }) {
   const parsed = useMemo(() => parseAssistantContent(content), [content]);
   const finalAnswer = parsed.finalAnswer.trim()
@@ -250,7 +304,7 @@ export default function QaAssistant() {
   const [skillQuery, setSkillQuery] = useState("");
   const [showSkillManager, setShowSkillManager] = useState(false);
   const [skillModalTab, setSkillModalTab] = useState<"select" | "manage">("select");
-  const [skillManagerTab, setSkillManagerTab] = useState<"manual" | "github">("manual");
+  const [skillManagerTab, setSkillManagerTab] = useState<"manual" | "github" | "mcp">("manual");
   const [manualLabel, setManualLabel] = useState("");
   const [manualDescription, setManualDescription] = useState("");
   const [manualModeHint, setManualModeHint] = useState<QaSkillModeHint>("auto");
@@ -265,6 +319,18 @@ export default function QaAssistant() {
   const [githubError, setGithubError] = useState("");
   const [githubMessage, setGithubMessage] = useState("");
   const [githubImporting, setGithubImporting] = useState("");
+  const [mcpModules, setMcpModules] = useState<QaMcpModule[]>([]);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [mcpError, setMcpError] = useState("");
+  const [mcpMessage, setMcpMessage] = useState("");
+  const [mcpSubmitting, setMcpSubmitting] = useState(false);
+  const [mcpLabel, setMcpLabel] = useState("");
+  const [mcpDescription, setMcpDescription] = useState("");
+  const [mcpEndpointUrl, setMcpEndpointUrl] = useState("");
+  const [mcpModeHint, setMcpModeHint] = useState<QaSkillModeHint>("auto");
+  const [mcpKeywordHints, setMcpKeywordHints] = useState("");
+  const [mcpToolAllowlist, setMcpToolAllowlist] = useState("");
+  const [mcpHeadersText, setMcpHeadersText] = useState("{}");
 
   useEffect(() => {
     const node = feedRef.current;
@@ -288,6 +354,13 @@ export default function QaAssistant() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [showSkillManager]);
+
+  useEffect(() => {
+    if (!showSkillManager || skillModalTab !== "manage" || skillManagerTab !== "mcp") {
+      return;
+    }
+    void loadMcpModules();
+  }, [showSkillManager, skillModalTab, skillManagerTab]);
 
   const showPendingRow = useMemo(() => {
     if (!loading) return false;
@@ -475,6 +548,77 @@ export default function QaAssistant() {
       setGithubError(message);
     } finally {
       setGithubImporting("");
+    }
+  }
+
+  async function loadMcpModules() {
+    setMcpLoading(true);
+    setMcpError("");
+
+    try {
+      const response = await fetch("/api/admin/qa/mcp-modules", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, "Failed to load MCP modules."));
+      }
+
+      const payload = (await response.json()) as { modules?: QaMcpModule[] };
+      setMcpModules(Array.isArray(payload.modules) ? payload.modules : []);
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "Failed to load MCP modules.";
+      setMcpError(message);
+      setMcpModules([]);
+    } finally {
+      setMcpLoading(false);
+    }
+  }
+
+  async function createMcpModule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (mcpSubmitting) return;
+
+    setMcpSubmitting(true);
+    setMcpError("");
+    setMcpMessage("");
+
+    try {
+      const headers = parseHeadersText(mcpHeadersText);
+      const keywordHints = parseDelimitedList(mcpKeywordHints).slice(0, 20);
+      const toolAllowlist = parseDelimitedList(mcpToolAllowlist).slice(0, 60);
+
+      const response = await fetch("/api/admin/qa/mcp-modules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: mcpLabel,
+          description: mcpDescription,
+          endpointUrl: mcpEndpointUrl,
+          modeHint: mcpModeHint,
+          headers,
+          keywordHints,
+          toolAllowlist,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, "Failed to create MCP module."));
+      }
+
+      await loadMcpModules();
+      setMcpLabel("");
+      setMcpDescription("");
+      setMcpEndpointUrl("");
+      setMcpModeHint("auto");
+      setMcpKeywordHints("");
+      setMcpToolAllowlist("");
+      setMcpHeadersText("{}");
+      setMcpMessage("MCP 模块已创建，问答时会自动评估是否调用其工具。");
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "Failed to create MCP module.";
+      setMcpError(message);
+    } finally {
+      setMcpSubmitting(false);
     }
   }
 
@@ -701,7 +845,9 @@ export default function QaAssistant() {
                 type="button"
                 className={skillModalTab === "select" ? "is-active" : undefined}
                 onClick={() => setSkillModalTab("select")}
-                disabled={manualSubmitting || githubSearching || Boolean(githubImporting)}
+                disabled={
+                  manualSubmitting || githubSearching || Boolean(githubImporting) || mcpSubmitting
+                }
               >
                 选择 Skill
               </button>
@@ -709,7 +855,9 @@ export default function QaAssistant() {
                 type="button"
                 className={skillModalTab === "manage" ? "is-active" : undefined}
                 onClick={() => setSkillModalTab("manage")}
-                disabled={manualSubmitting || githubSearching || Boolean(githubImporting)}
+                disabled={
+                  manualSubmitting || githubSearching || Boolean(githubImporting) || mcpSubmitting
+                }
               >
                 添加 Skill
               </button>
@@ -815,7 +963,9 @@ export default function QaAssistant() {
                     type="button"
                     className={skillManagerTab === "manual" ? "is-active" : undefined}
                     onClick={() => setSkillManagerTab("manual")}
-                    disabled={manualSubmitting || githubSearching || Boolean(githubImporting)}
+                    disabled={
+                      manualSubmitting || githubSearching || Boolean(githubImporting) || mcpSubmitting
+                    }
                   >
                     手动创建
                   </button>
@@ -823,9 +973,21 @@ export default function QaAssistant() {
                     type="button"
                     className={skillManagerTab === "github" ? "is-active" : undefined}
                     onClick={() => setSkillManagerTab("github")}
-                    disabled={manualSubmitting || githubSearching || Boolean(githubImporting)}
+                    disabled={
+                      manualSubmitting || githubSearching || Boolean(githubImporting) || mcpSubmitting
+                    }
                   >
                     GitHub 高 Star
+                  </button>
+                  <button
+                    type="button"
+                    className={skillManagerTab === "mcp" ? "is-active" : undefined}
+                    onClick={() => setSkillManagerTab("mcp")}
+                    disabled={
+                      manualSubmitting || githubSearching || Boolean(githubImporting) || mcpSubmitting
+                    }
+                  >
+                    MCP 模块
                   </button>
                 </div>
 
@@ -884,7 +1046,7 @@ export default function QaAssistant() {
                       {manualError ? <span className="is-error">{manualError}</span> : null}
                     </div>
                   </form>
-                ) : (
+                ) : skillManagerTab === "github" ? (
                   <section className="admin-skill-manager-github">
                     <form className="admin-skill-manager-form is-inline" onSubmit={searchGithubSkillItems}>
                       <label>
@@ -942,6 +1104,122 @@ export default function QaAssistant() {
                           </div>
                         </article>
                       ))}
+                    </div>
+                  </section>
+                ) : (
+                  <section className="admin-skill-manager-github">
+                    <form className="admin-skill-manager-form" onSubmit={createMcpModule}>
+                      <label>
+                        模块名称
+                        <input
+                          type="text"
+                          value={mcpLabel}
+                          onChange={(event) => setMcpLabel(event.target.value)}
+                          placeholder="例如：GitHub MCP"
+                          maxLength={120}
+                          required
+                        />
+                      </label>
+                      <label>
+                        描述
+                        <input
+                          type="text"
+                          value={mcpDescription}
+                          onChange={(event) => setMcpDescription(event.target.value)}
+                          placeholder="这个 MCP 模块能做什么"
+                          maxLength={400}
+                        />
+                      </label>
+                      <label>
+                        MCP Endpoint URL
+                        <input
+                          type="url"
+                          value={mcpEndpointUrl}
+                          onChange={(event) => setMcpEndpointUrl(event.target.value)}
+                          placeholder="https://your-mcp-server.example.com/mcp"
+                          maxLength={500}
+                          required
+                        />
+                      </label>
+                      <label>
+                        Mode 偏好
+                        <select
+                          value={mcpModeHint}
+                          onChange={(event) => setMcpModeHint(event.target.value as QaSkillModeHint)}
+                        >
+                          <option value="auto">Auto</option>
+                          <option value="blog">Blog</option>
+                          <option value="web">Web</option>
+                        </select>
+                      </label>
+                      <label>
+                        关键词提示（逗号分隔，可选）
+                        <input
+                          type="text"
+                          value={mcpKeywordHints}
+                          onChange={(event) => setMcpKeywordHints(event.target.value)}
+                          placeholder="github, issue, pr, repo"
+                          maxLength={1200}
+                        />
+                      </label>
+                      <label>
+                        工具白名单（逗号分隔，可选）
+                        <input
+                          type="text"
+                          value={mcpToolAllowlist}
+                          onChange={(event) => setMcpToolAllowlist(event.target.value)}
+                          placeholder="search_repositories, create_issue"
+                          maxLength={2000}
+                        />
+                      </label>
+                      <label>
+                        Headers（JSON，对象格式）
+                        <textarea
+                          value={mcpHeadersText}
+                          onChange={(event) => setMcpHeadersText(event.target.value)}
+                          rows={4}
+                          placeholder='{"Authorization":"Bearer xxx"}'
+                          maxLength={4000}
+                        />
+                      </label>
+
+                      <div className="admin-skill-manager-actions">
+                        <button type="submit" disabled={mcpSubmitting}>
+                          {mcpSubmitting ? "创建中..." : "创建 MCP 模块"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void loadMcpModules()}
+                          disabled={mcpLoading || mcpSubmitting}
+                        >
+                          {mcpLoading ? "刷新中..." : "刷新列表"}
+                        </button>
+                        {mcpMessage ? <span>{mcpMessage}</span> : null}
+                        {mcpError ? <span className="is-error">{mcpError}</span> : null}
+                      </div>
+                    </form>
+
+                    <div className="admin-skill-manager-results">
+                      {mcpModules.length === 0 ? (
+                        <p className="admin-skill-manager-hint">暂无 MCP 模块，可先创建一个。</p>
+                      ) : (
+                        mcpModules.map((item) => (
+                          <article key={item.moduleKey}>
+                            <div>
+                              <h4>{item.label}</h4>
+                              <p>{item.description}</p>
+                              <small>
+                                {item.endpointUrl} · {item.isEnabled ? "enabled" : "disabled"} · mode:{" "}
+                                {item.modeHint}
+                              </small>
+                            </div>
+                            <div className="admin-skill-manager-actions">
+                              <small>tools: {item.toolAllowlist.length || "all"}</small>
+                              <small>keywords: {item.keywordHints.join(", ") || "none"}</small>
+                            </div>
+                          </article>
+                        ))
+                      )}
                     </div>
                   </section>
                 )}

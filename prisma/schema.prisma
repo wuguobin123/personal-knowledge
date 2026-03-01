@@ -71,6 +71,24 @@ model QaSkill {
   @@index([source, stars])
 }
 
+model QaMcpModule {
+  id            Int            @id @default(autoincrement())
+  moduleKey     String         @unique @db.VarChar(120)
+  label         String         @db.VarChar(120)
+  description   String         @db.VarChar(400)
+  transport     QaMcpTransport @default(STREAMABLE_HTTP)
+  endpointUrl   String         @db.VarChar(500)
+  headers       Json?
+  keywordHints  Json?
+  toolAllowlist Json?
+  modeHint      QaSkillMode    @default(AUTO)
+  isEnabled     Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([isEnabled, createdAt])
+}
+
 enum ArticleSourceType {
   ORIGINAL
   CRAWLER
@@ -92,4 +110,8 @@ enum QaSkillMode {
 enum QaSkillSource {
   MANUAL
   GITHUB
+}
+
+enum QaMcpTransport {
+  STREAMABLE_HTTP
 }

@@ -12,6 +12,7 @@
 - 支持 Markdown 渲染与代码高亮
 - 支持图片上传（本地 / 阿里云 OSS）
 - 内置 AI 新闻定时抓取（每天早上 7 点，入库待审核）
+- Q&A 助手支持 MCP 模块注册与自动工具调用（HTTP MCP）
 - 内置种子文章数据
 
 ## 1. 本地开发（不使用 Docker）
@@ -246,6 +247,12 @@ curl -X POST http://localhost:3000/api/articles \
 3. 填写标题、分类、标签、来源信息、摘要和 Markdown 正文。
 4. 可直接上传图片，系统会自动插入 Markdown 图片链接。
 5. 右侧实时预览无误后发布。
+
+Q&A MCP 配置（后台 `/admin` -> Q&A Assistant -> 添加 Skill -> MCP 模块）：
+
+1. 手动录入 MCP endpoint（Streamable HTTP）和可选 headers。
+2. 可配置关键词提示、工具白名单和 mode 偏好（Auto/Blog/Web）。
+3. 问答时系统会先自动评估是否需要调用 MCP 工具，再把结果注入回答上下文。
 
 ## 7. 图片上传配置
 

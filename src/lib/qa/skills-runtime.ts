@@ -7,6 +7,7 @@ import {
   type QaSkillOption,
 } from "@/lib/qa/skills-catalog";
 import { getCustomQaSkill, toQaSkillOption } from "@/lib/qa/custom-skills";
+import { tryAutoRunQaMcpTool } from "@/lib/qa/mcp-runtime";
 import {
   runQaMultiAgentStream,
   type QaMessage,
@@ -31,6 +32,12 @@ export type QaSkillMeta = {
   skillId: QaSkillId;
   skillLabel: string;
   skillDescription: string;
+  mcpUsed?: boolean;
+  mcpModuleKey?: string;
+  mcpModuleLabel?: string;
+  mcpToolName?: string;
+  mcpReason?: string;
+  mcpError?: string;
 };
 
 export type QaSkillStreamResult = QaMultiAgentStreamResult & QaSkillMeta;
@@ -142,10 +149,29 @@ export async function runQaSkillStream(
   }
 
   const skillMeta = createSkillMeta(selectedOption);
+  const effectiveMode = selectedRule?.modeOverride || input.mode;
+  const mcpExecution = await tryAutoRunQaMcpTool({
+    messages: input.messages,
+    mode: effectiveMode,
+    signal: handlers.signal,
+  });
+  const messagesWithMcp = mcpExecution.contextMessage
+    ? [...input.messages, mcpExecution.contextMessage]
+    : input.messages;
+  const combinedMeta: QaSkillMeta = {
+    ...skillMeta,
+    mcpUsed: mcpExecution.used,
+    mcpModuleKey: mcpExecution.moduleKey,
+    mcpModuleLabel: mcpExecution.moduleLabel,
+    mcpToolName: mcpExecution.toolName,
+    mcpReason: mcpExecution.reason,
+    mcpError: mcpExecution.error,
+  };
+
   if (selectedOption.id === "none" || !selectedRule) {
     const result = await runQaMultiAgentStream(
       {
-        messages: input.messages,
+        messages: messagesWithMcp,
         mode: input.mode,
       },
       {
@@ -153,7 +179,7 @@ export async function runQaSkillStream(
         onMeta(meta) {
           handlers.onMeta?.({
             ...meta,
-            ...skillMeta,
+            ...combinedMeta,
           });
         },
       },
@@ -161,11 +187,11 @@ export async function runQaSkillStream(
 
     return {
       ...result,
-      ...skillMeta,
+      ...combinedMeta,
     };
   }
 
-  const enhancedMessages = appendSkillInstruction(input.messages, selectedRule);
+  const enhancedMessages = appendSkillInstruction(messagesWithMcp, selectedRule);
   const mode = selectedRule.modeOverride || input.mode;
 
   const result = await runQaMultiAgentStream(
@@ -178,7 +204,7 @@ export async function runQaSkillStream(
       onMeta(meta) {
         handlers.onMeta?.({
           ...meta,
-          ...skillMeta,
+          ...combinedMeta,
         });
       },
     },
@@ -186,6 +212,6 @@ export async function runQaSkillStream(
 
   return {
     ...result,
-    ...skillMeta,
+    ...combinedMeta,
   };
 }

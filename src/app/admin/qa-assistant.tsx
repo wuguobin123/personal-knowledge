@@ -420,7 +420,7 @@ function AssistantMessage({
     : parsed.thinking
       ? "正在生成最终结果..."
       : pending
-        ? "正在连接模型..."
+        ? "执行中..."
         : "（暂无可展示内容）";
 
   return (

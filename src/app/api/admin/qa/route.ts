@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { getAdminSession } from "@/lib/auth";
-import { DEFAULT_QA_SKILL_ID, QA_SKILL_IDS } from "@/lib/qa/skills-catalog";
+import { DEFAULT_QA_SKILL_ID } from "@/lib/qa/skills-catalog";
 import { runQaSkillStream } from "@/lib/qa/skills-runtime";
 
 export const runtime = "nodejs";
 
 const requestSchema = z.object({
   mode: z.enum(["auto", "blog", "web"]).optional().default("auto"),
-  skillId: z.enum(QA_SKILL_IDS).optional().default(DEFAULT_QA_SKILL_ID),
+  skillId: z.string().trim().min(1).max(120).optional().default(DEFAULT_QA_SKILL_ID),
   messages: z
     .array(
       z.object({

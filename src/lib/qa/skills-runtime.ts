@@ -1,8 +1,12 @@
 import {
   DEFAULT_QA_SKILL_ID,
   getQaSkillOption,
+  isQaBuiltinSkillId,
+  type QaBuiltinSkillId,
   type QaSkillId,
+  type QaSkillOption,
 } from "@/lib/qa/skills-catalog";
+import { getCustomQaSkill, toQaSkillOption } from "@/lib/qa/custom-skills";
 import {
   runQaMultiAgentStream,
   type QaMessage,
@@ -31,7 +35,7 @@ export type QaSkillMeta = {
 
 export type QaSkillStreamResult = QaMultiAgentStreamResult & QaSkillMeta;
 
-const QA_SKILL_RULES: Record<Exclude<QaSkillId, "none">, QaSkillRuntimeRule> = {
+const QA_SKILL_RULES: Record<Exclude<QaBuiltinSkillId, "none">, QaSkillRuntimeRule> = {
   "topic-research": {
     modeOverride: "blog",
     instruction: [
@@ -66,10 +70,9 @@ const QA_SKILL_RULES: Record<Exclude<QaSkillId, "none">, QaSkillRuntimeRule> = {
   },
 };
 
-function createSkillMeta(skillId: QaSkillId): QaSkillMeta {
-  const option = getQaSkillOption(skillId);
+function createSkillMeta(option: QaSkillOption): QaSkillMeta {
   return {
-    skillId,
+    skillId: option.id,
     skillLabel: option.label,
     skillDescription: option.description,
   };
@@ -116,10 +119,30 @@ export async function runQaSkillStream(
   },
   handlers: QaSkillRuntimeHandlers = {},
 ): Promise<QaSkillStreamResult> {
-  const skillId = input.skillId || DEFAULT_QA_SKILL_ID;
-  const skillMeta = createSkillMeta(skillId);
+  const requestedSkillId = (input.skillId || DEFAULT_QA_SKILL_ID).trim() || DEFAULT_QA_SKILL_ID;
+  let selectedOption = getQaSkillOption(DEFAULT_QA_SKILL_ID);
+  let selectedRule: QaSkillRuntimeRule | undefined;
 
-  if (skillId === "none") {
+  if (requestedSkillId === DEFAULT_QA_SKILL_ID) {
+    selectedOption = getQaSkillOption(DEFAULT_QA_SKILL_ID);
+  } else if (isQaBuiltinSkillId(requestedSkillId)) {
+    selectedOption = getQaSkillOption(requestedSkillId);
+    if (requestedSkillId !== "none") {
+      selectedRule = QA_SKILL_RULES[requestedSkillId];
+    }
+  } else {
+    const customSkill = await getCustomQaSkill(requestedSkillId);
+    if (customSkill && customSkill.isEnabled) {
+      selectedOption = toQaSkillOption(customSkill);
+      selectedRule = {
+        instruction: customSkill.instruction,
+        modeOverride: customSkill.modeHint === "auto" ? undefined : customSkill.modeHint,
+      };
+    }
+  }
+
+  const skillMeta = createSkillMeta(selectedOption);
+  if (selectedOption.id === "none" || !selectedRule) {
     const result = await runQaMultiAgentStream(
       {
         messages: input.messages,
@@ -142,9 +165,8 @@ export async function runQaSkillStream(
     };
   }
 
-  const skillRule = QA_SKILL_RULES[skillId];
-  const enhancedMessages = appendSkillInstruction(input.messages, skillRule);
-  const mode = skillRule.modeOverride || input.mode;
+  const enhancedMessages = appendSkillInstruction(input.messages, selectedRule);
+  const mode = selectedRule.modeOverride || input.mode;
 
   const result = await runQaMultiAgentStream(
     {

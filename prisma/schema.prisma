@@ -53,6 +53,24 @@ model AiNewsItem {
   @@index([source, externalId])
 }
 
+model QaSkill {
+  id          Int           @id @default(autoincrement())
+  skillKey    String        @unique @db.VarChar(120)
+  label       String        @db.VarChar(120)
+  description String        @db.VarChar(400)
+  instruction String        @db.LongText
+  modeHint    QaSkillMode   @default(AUTO)
+  source      QaSkillSource @default(MANUAL)
+  githubUrl   String?       @db.VarChar(500)
+  stars       Int?
+  isEnabled   Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([isEnabled, createdAt])
+  @@index([source, stars])
+}
+
 enum ArticleSourceType {
   ORIGINAL
   CRAWLER
@@ -63,4 +81,15 @@ enum AiNewsCategory {
   GENERAL_NEWS
   MODEL_RELEASE
   GITHUB_PROJECT
+}
+
+enum QaSkillMode {
+  AUTO
+  BLOG
+  WEB
+}
+
+enum QaSkillSource {
+  MANUAL
+  GITHUB
 }

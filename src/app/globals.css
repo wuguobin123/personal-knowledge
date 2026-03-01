@@ -2375,20 +2375,403 @@ p {
   background: rgba(9, 27, 47, 0.9);
   color: #9db3cb;
   font: inherit;
-  cursor: pointer;
-}
-
-.admin-assistant-top-actions button:first-child {
   height: 34px;
   padding: 0 14px;
   font-size: 0.88rem;
   font-weight: 600;
+  cursor: pointer;
 }
 
-.admin-assistant-top-actions button:last-child {
-  width: 34px;
-  height: 34px;
+.admin-assistant-skill-error {
+  margin: 0;
+  padding: 10px clamp(16px, 3.2vw, 28px);
+  color: #f8b4b4;
+  font-size: 0.88rem;
+}
+
+.admin-skill-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(2, 10, 18, 0.58);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+}
+
+.admin-skill-modal-panel {
+  width: min(880px, 100%);
+  max-height: calc(100vh - 44px);
+  overflow-y: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(35, 70, 103, 0.92);
+  background: linear-gradient(180deg, rgba(11, 25, 42, 0.96), rgba(8, 19, 34, 0.96));
+  box-shadow: 0 30px 70px rgba(2, 10, 20, 0.55);
+  padding: 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.admin-skill-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-skill-modal-head h3 {
+  margin: 0;
+  color: #e1ecfa;
   font-size: 1rem;
+}
+
+.admin-skill-modal-head button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(35, 70, 103, 0.92);
+  border-radius: 999px;
+  background: rgba(9, 27, 47, 0.88);
+  color: #9db3cb;
+  font: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.admin-skill-modal-tabs {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-skill-modal-tabs button {
+  height: 32px;
+  border: 1px solid rgba(35, 70, 103, 0.88);
+  border-radius: 999px;
+  background: rgba(9, 27, 47, 0.88);
+  color: #9db3cb;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.admin-skill-modal-tabs button.is-active {
+  border-color: rgba(56, 151, 243, 0.92);
+  background: rgba(18, 87, 151, 0.28);
+  color: #d9ecff;
+}
+
+.admin-skill-selector {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-skill-selector-search {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 8px;
+}
+
+.admin-skill-selector-search input {
+  border: 1px solid rgba(35, 70, 103, 0.9);
+  border-radius: 10px;
+  background: rgba(8, 27, 46, 0.78);
+  color: #e5eef9;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 9px 10px;
+}
+
+.admin-skill-selector-search button {
+  height: 38px;
+  border: 1px solid rgba(40, 132, 220, 0.86);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #2f93ed, #227fd5);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.admin-skill-card-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-skill-card {
+  border: 1px solid rgba(35, 70, 103, 0.9);
+  border-radius: 12px;
+  background: rgba(11, 30, 49, 0.76);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-skill-card.is-selected {
+  border-color: rgba(64, 154, 233, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(64, 154, 233, 0.28);
+}
+
+.admin-skill-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.admin-skill-card h4 {
+  margin: 0;
+  color: #dce9f7;
+  font-size: 0.92rem;
+}
+
+.admin-skill-card header span {
+  border: 1px solid rgba(51, 112, 173, 0.9);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: #86aed8;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-skill-card p {
+  margin: 0;
+  color: #9ab4cf;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  min-height: 40px;
+}
+
+.admin-skill-card small {
+  color: #7fa1c6;
+  font-size: 0.76rem;
+}
+
+.admin-skill-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.admin-skill-card-actions a,
+.admin-skill-card-actions button {
+  height: 30px;
+  border: 1px solid rgba(40, 132, 220, 0.86);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2f93ed, #227fd5);
+  color: #ffffff;
+  text-decoration: none;
+  font: inherit;
+  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.admin-skill-card-actions button:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+}
+
+.admin-skill-empty {
+  margin: 0;
+  grid-column: 1 / -1;
+  border: 1px dashed rgba(57, 97, 134, 0.8);
+  border-radius: 12px;
+  color: #92afcc;
+  font-size: 0.84rem;
+  text-align: center;
+  padding: 24px 12px;
+}
+
+.admin-skill-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-skill-pagination button {
+  height: 30px;
+  border: 1px solid rgba(35, 70, 103, 0.88);
+  border-radius: 8px;
+  background: rgba(9, 27, 47, 0.9);
+  color: #9db3cb;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.admin-skill-pagination button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-skill-pagination span {
+  color: #90adca;
+  font-size: 0.8rem;
+}
+
+.admin-skill-manager {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.admin-skill-manager-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-skill-manager-tabs button {
+  height: 32px;
+  border: 1px solid rgba(35, 70, 103, 0.88);
+  border-radius: 999px;
+  background: rgba(9, 27, 47, 0.9);
+  color: #9db3cb;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.admin-skill-manager-tabs button.is-active {
+  border-color: rgba(56, 151, 243, 0.92);
+  background: rgba(18, 87, 151, 0.28);
+  color: #d9ecff;
+}
+
+.admin-skill-manager-form {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-skill-manager-form label {
+  display: grid;
+  gap: 6px;
+  color: #9bb3cc;
+  font-size: 0.82rem;
+}
+
+.admin-skill-manager-form input,
+.admin-skill-manager-form select,
+.admin-skill-manager-form textarea {
+  border: 1px solid rgba(35, 70, 103, 0.9);
+  border-radius: 10px;
+  background: rgba(8, 27, 46, 0.78);
+  color: #e5eef9;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 9px 10px;
+}
+
+.admin-skill-manager-form textarea {
+  resize: vertical;
+  min-height: 118px;
+}
+
+.admin-skill-manager-form.is-inline {
+  grid-template-columns: minmax(220px, 1fr) 150px auto;
+  align-items: end;
+}
+
+.admin-skill-manager-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.admin-skill-manager-actions button,
+.admin-skill-manager-actions a {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(40, 132, 220, 0.86);
+  border-radius: 9px;
+  background: linear-gradient(180deg, #2f93ed, #227fd5);
+  color: #ffffff;
+  text-decoration: none;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.admin-skill-manager-actions span {
+  color: #9ec4e6;
+  font-size: 0.82rem;
+}
+
+.admin-skill-manager-actions .is-error {
+  color: #f8b4b4;
+}
+
+.admin-skill-manager-github {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-skill-manager-hint {
+  margin: 0;
+  color: #93afcc;
+  font-size: 0.82rem;
+}
+
+.admin-skill-manager-hint.is-error {
+  color: #f8b4b4;
+}
+
+.admin-skill-manager-results {
+  display: grid;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.admin-skill-manager-results article {
+  border: 1px solid rgba(35, 70, 103, 0.9);
+  border-radius: 12px;
+  background: rgba(11, 30, 49, 0.76);
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-skill-manager-results h4 {
+  margin: 0;
+  color: #dce9f7;
+  font-size: 0.92rem;
+}
+
+.admin-skill-manager-results p {
+  margin: 6px 0 8px;
+  color: #9ab4cf;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.admin-skill-manager-results small {
+  color: #7fa1c6;
+  font-size: 0.76rem;
 }
 
 .admin-assistant-feed {
@@ -2651,6 +3034,11 @@ p {
 .admin-assistant-compose-tools button:hover {
   background: rgba(17, 32, 52, 0.9);
   color: #d8e5f4;
+}
+
+.admin-assistant-compose-tools button.is-active {
+  background: rgba(18, 87, 151, 0.28);
+  color: #d8ecff;
 }
 
 .admin-assistant-skill-tag {
@@ -3314,6 +3702,11 @@ p {
     flex-wrap: wrap;
   }
 
+  .admin-assistant-top-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
   .admin-assistant-skill-switch {
     width: 100%;
     justify-content: space-between;
@@ -3349,6 +3742,36 @@ p {
   .admin-assistant-compose-send {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .admin-skill-modal {
+    padding: 12px;
+  }
+
+  .admin-skill-modal-panel {
+    max-height: calc(100vh - 24px);
+    padding: 12px;
+  }
+
+  .admin-skill-selector-search {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-skill-card-list {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-skill-pagination {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-skill-manager-form.is-inline {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-skill-manager-results article {
+    flex-direction: column;
   }
 }
 
@@ -4796,6 +5219,166 @@ p {
   color: #6f829b;
 }
 
+.admin-assistant-skill-error {
+  color: #b33a4f;
+}
+
+.admin-skill-modal {
+  background: rgba(13, 23, 38, 0.35);
+}
+
+.admin-skill-modal-panel {
+  border: 1px solid #d3deec;
+  background: linear-gradient(180deg, #ffffff, #f6faff);
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.16);
+}
+
+.admin-skill-modal-head h3 {
+  color: #1f304a;
+}
+
+.admin-skill-modal-head button {
+  border: 1px solid #d3deec;
+  background: #ffffff;
+  color: #6f829b;
+}
+
+.admin-skill-modal-tabs button {
+  border: 1px solid #d3deec;
+  background: #ffffff;
+  color: #6f829b;
+}
+
+.admin-skill-modal-tabs button.is-active {
+  border-color: #9ec1fa;
+  background: #eaf1fe;
+  color: #2f6feb;
+}
+
+.admin-skill-selector-search input {
+  border: 1px solid #d3deec;
+  background: #ffffff;
+  color: #1f304a;
+}
+
+.admin-skill-selector-search button {
+  border: 1px solid #3f7ef2;
+  background: linear-gradient(180deg, #4d8cff, #2f6feb);
+}
+
+.admin-skill-card {
+  border: 1px solid #dce5f2;
+  background: #ffffff;
+}
+
+.admin-skill-card.is-selected {
+  border-color: #3f7ef2;
+  box-shadow: inset 0 0 0 1px rgba(63, 126, 242, 0.2);
+}
+
+.admin-skill-card h4 {
+  color: #1f304a;
+}
+
+.admin-skill-card header span {
+  border: 1px solid #c9dcf7;
+  color: #5d81b1;
+}
+
+.admin-skill-card p {
+  color: #5f738d;
+}
+
+.admin-skill-card small {
+  color: #6f829b;
+}
+
+.admin-skill-card-actions a,
+.admin-skill-card-actions button {
+  border: 1px solid #3f7ef2;
+  background: linear-gradient(180deg, #4d8cff, #2f6feb);
+}
+
+.admin-skill-empty {
+  border: 1px dashed #c9d9ee;
+  color: #6f829b;
+}
+
+.admin-skill-pagination button {
+  border: 1px solid #d3deec;
+  background: #ffffff;
+  color: #6f829b;
+}
+
+.admin-skill-pagination span {
+  color: #6f829b;
+}
+
+.admin-skill-manager {
+  border: 0;
+  background: transparent;
+}
+
+.admin-skill-manager-tabs button {
+  border: 1px solid #d3deec;
+  background: #ffffff;
+  color: #6f829b;
+}
+
+.admin-skill-manager-tabs button.is-active {
+  border-color: #9ec1fa;
+  background: #eaf1fe;
+  color: #2f6feb;
+}
+
+.admin-skill-manager-form label {
+  color: #6d8099;
+}
+
+.admin-skill-manager-form input,
+.admin-skill-manager-form select,
+.admin-skill-manager-form textarea {
+  border: 1px solid #d3deec;
+  background: #ffffff;
+  color: #1f304a;
+}
+
+.admin-skill-manager-actions button,
+.admin-skill-manager-actions a {
+  border: 1px solid #3f7ef2;
+  background: linear-gradient(180deg, #4d8cff, #2f6feb);
+}
+
+.admin-skill-manager-actions span {
+  color: #5f7fa8;
+}
+
+.admin-skill-manager-actions .is-error,
+.admin-skill-manager-hint.is-error {
+  color: #bf2f40;
+}
+
+.admin-skill-manager-hint {
+  color: #6f829b;
+}
+
+.admin-skill-manager-results article {
+  border: 1px solid #dce5f2;
+  background: #ffffff;
+}
+
+.admin-skill-manager-results h4 {
+  color: #1f304a;
+}
+
+.admin-skill-manager-results p {
+  color: #5f738d;
+}
+
+.admin-skill-manager-results small {
+  color: #6f829b;
+}
+
 .admin-assistant-avatar.is-ai {
   border: 1px solid rgba(47, 111, 235, 0.28);
   background: #edf3ff;
@@ -4891,6 +5474,11 @@ p {
 
 .admin-assistant-compose-tools button:hover {
   background: #edf3fc;
+  color: #2f6feb;
+}
+
+.admin-assistant-compose-tools button.is-active {
+  background: #eaf1fe;
   color: #2f6feb;
 }
 

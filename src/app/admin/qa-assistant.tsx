@@ -407,9 +407,11 @@ function getMcpStatus(meta?: StreamMetaPayload | null) {
 function AssistantMessage({
   content,
   meta,
+  pending = false,
 }: {
   content: string;
   meta?: StreamMetaPayload | null;
+  pending?: boolean;
 }) {
   const parsed = useMemo(() => parseAssistantContent(content), [content]);
   const mcpStatus = useMemo(() => getMcpStatus(meta), [meta]);
@@ -417,12 +419,14 @@ function AssistantMessage({
     ? parsed.finalAnswer
     : parsed.thinking
       ? "正在生成最终结果..."
-      : "（暂无可展示内容）";
+      : pending
+        ? "正在连接模型..."
+        : "（暂无可展示内容）";
 
   return (
     <div className="admin-assistant-ai-content">
       <div className="admin-assistant-final">
-        <span className="admin-assistant-final-label">最终结果</span>
+        <span className="admin-assistant-final-label">执行结果</span>
         {mcpStatus ? (
           <div className={`admin-assistant-mcp-status${mcpStatus.isError ? " is-error" : ""}`}>
             <strong>{mcpStatus.title}</strong>
@@ -531,11 +535,10 @@ export default function QaAssistant() {
     void loadMcpModules();
   }, [showSkillManager, skillModalTab, skillManagerTab]);
 
-  const showPendingRow = useMemo(() => {
-    if (!loading) return false;
+  const latestAssistantId = useMemo(() => {
     const latestAssistant = [...messages].reverse().find((item) => item.role === "assistant");
-    return !latestAssistant || !latestAssistant.content.trim();
-  }, [messages, loading]);
+    return latestAssistant?.id || null;
+  }, [messages]);
 
   function applySelectedSkill(skill: QaSkillOption) {
     setSkillId(skill.id);
@@ -1635,7 +1638,16 @@ export default function QaAssistant() {
             <article className="admin-assistant-row" key={message.id}>
               <div className="admin-assistant-avatar is-ai">AI</div>
               <div className="admin-assistant-bubble is-ai">
-                <AssistantMessage content={message.content} meta={message.meta} />
+                <AssistantMessage
+                  content={message.content}
+                  meta={message.meta}
+                  pending={Boolean(
+                    loading &&
+                      latestAssistantId &&
+                      message.id === latestAssistantId &&
+                      !message.content.trim(),
+                  )}
+                />
               </div>
             </article>
           ) : (
@@ -1648,15 +1660,6 @@ export default function QaAssistant() {
             </article>
           ),
         )}
-
-        {showPendingRow ? (
-          <article className="admin-assistant-row">
-            <div className="admin-assistant-avatar is-ai">AI</div>
-            <div className="admin-assistant-bubble is-ai">
-              <p>正在连接模型...</p>
-            </div>
-          </article>
-        ) : null}
 
         {error ? (
           <article className="admin-assistant-row">

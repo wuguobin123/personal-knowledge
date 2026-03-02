@@ -64,13 +64,16 @@ type GithubSkillSearchItem = {
   htmlUrl: string;
 };
 
+type QaMcpTransport = "streamable_http" | "sse" | "stdio";
+
 type QaMcpModule = {
   id: number;
   moduleKey: string;
   label: string;
   description: string;
-  transport: "streamable_http";
+  transport: QaMcpTransport;
   endpointUrl: string;
+  connectionConfig: Record<string, unknown>;
   keywordHints: string[];
   toolAllowlist: string[];
   headers: Record<string, string>;
@@ -263,7 +266,7 @@ function parseDelimitedList(raw: string) {
   );
 }
 
-function parseHeadersText(raw: string) {
+function parseKeyValueJsonText(raw: string, label: string) {
   const text = String(raw || "").trim();
   if (!text) {
     return {} as Record<string, string>;
@@ -271,7 +274,7 @@ function parseHeadersText(raw: string) {
 
   const parsed = parseJson<Record<string, unknown>>(text);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Headers 必须是 JSON 对象，例如 {\"Authorization\":\"Bearer xxx\"}");
+    throw new Error(`${label} 必须是 JSON 对象，例如 {"KEY":"VALUE"}`);
   }
 
   const headers: Record<string, string> = {};
@@ -284,6 +287,14 @@ function parseHeadersText(raw: string) {
     headers[headerKey] = headerValue;
   }
   return headers;
+}
+
+function parseHeadersText(raw: string) {
+  return parseKeyValueJsonText(raw, "Headers");
+}
+
+function parseEnvText(raw: string) {
+  return parseKeyValueJsonText(raw, "Env");
 }
 
 function normalizeQaMode(mode: unknown): QaMode {
@@ -494,7 +505,12 @@ export default function QaAssistant() {
   const [mcpSubmitting, setMcpSubmitting] = useState(false);
   const [mcpLabel, setMcpLabel] = useState("");
   const [mcpDescription, setMcpDescription] = useState("");
+  const [mcpTransport, setMcpTransport] = useState<QaMcpTransport>("streamable_http");
   const [mcpEndpointUrl, setMcpEndpointUrl] = useState("");
+  const [mcpCommand, setMcpCommand] = useState("");
+  const [mcpArgs, setMcpArgs] = useState("");
+  const [mcpEnvText, setMcpEnvText] = useState("{}");
+  const [mcpCwd, setMcpCwd] = useState("");
   const [mcpModeHint, setMcpModeHint] = useState<QaSkillModeHint>("auto");
   const [mcpKeywordHints, setMcpKeywordHints] = useState("");
   const [mcpToolAllowlist, setMcpToolAllowlist] = useState("");
@@ -870,9 +886,21 @@ export default function QaAssistant() {
     setMcpMessage("");
 
     try {
-      const headers = parseHeadersText(mcpHeadersText);
       const keywordHints = parseDelimitedList(mcpKeywordHints).slice(0, 20);
       const toolAllowlist = parseDelimitedList(mcpToolAllowlist).slice(0, 60);
+      const isStdio = mcpTransport === "stdio";
+      const headers = isStdio ? {} : parseHeadersText(mcpHeadersText);
+      const command = mcpCommand.trim();
+      const args = parseDelimitedList(mcpArgs).slice(0, 80);
+      const env = parseEnvText(mcpEnvText);
+      const cwd = mcpCwd.trim();
+
+      if (isStdio && !command) {
+        throw new Error("请先填写 STDIO command。");
+      }
+      if (!isStdio && !mcpEndpointUrl.trim()) {
+        throw new Error("请先填写 MCP Endpoint URL。");
+      }
 
       const response = await fetch("/api/admin/qa/mcp-modules", {
         method: "POST",
@@ -880,7 +908,12 @@ export default function QaAssistant() {
         body: JSON.stringify({
           label: mcpLabel,
           description: mcpDescription,
-          endpointUrl: mcpEndpointUrl,
+          transport: mcpTransport,
+          endpointUrl: mcpEndpointUrl.trim(),
+          command,
+          args,
+          env,
+          ...(cwd ? { cwd } : {}),
           modeHint: mcpModeHint,
           headers,
           keywordHints,
@@ -894,7 +927,12 @@ export default function QaAssistant() {
       await loadMcpModules();
       setMcpLabel("");
       setMcpDescription("");
+      setMcpTransport("streamable_http");
       setMcpEndpointUrl("");
+      setMcpCommand("");
+      setMcpArgs("");
+      setMcpEnvText("{}");
+      setMcpCwd("");
       setMcpModeHint("auto");
       setMcpKeywordHints("");
       setMcpToolAllowlist("");
@@ -916,17 +954,31 @@ export default function QaAssistant() {
     setMcpMessage("");
 
     try {
+      const isStdio = mcpTransport === "stdio";
       const endpointUrl = mcpEndpointUrl.trim();
-      if (!endpointUrl) {
+      const command = mcpCommand.trim();
+      const args = parseDelimitedList(mcpArgs).slice(0, 80);
+      const env = parseEnvText(mcpEnvText);
+      const cwd = mcpCwd.trim();
+      if (isStdio) {
+        if (!command) {
+          throw new Error("请先填写 STDIO command。");
+        }
+      } else if (!endpointUrl) {
         throw new Error("请先填写 MCP Endpoint URL。");
       }
 
-      const headers = parseHeadersText(mcpHeadersText);
+      const headers = isStdio ? {} : parseHeadersText(mcpHeadersText);
       const response = await fetch("/api/admin/qa/mcp-modules/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          endpointUrl,
+          transport: mcpTransport,
+          ...(endpointUrl ? { endpointUrl } : {}),
+          ...(command ? { command } : {}),
+          args,
+          env,
+          ...(cwd ? { cwd } : {}),
           headers,
         }),
       });
@@ -1527,16 +1579,89 @@ export default function QaAssistant() {
                         />
                       </label>
                       <label>
-                        MCP Endpoint URL
-                        <input
-                          type="url"
-                          value={mcpEndpointUrl}
-                          onChange={(event) => setMcpEndpointUrl(event.target.value)}
-                          placeholder="https://your-mcp-server.example.com/mcp"
-                          maxLength={500}
-                          required
-                        />
+                        MCP 接入格式
+                        <select
+                          value={mcpTransport}
+                          onChange={(event) => setMcpTransport(event.target.value as QaMcpTransport)}
+                        >
+                          <option value="streamable_http">Streamable HTTP</option>
+                          <option value="sse">SSE（Legacy）</option>
+                          <option value="stdio">STDIO（command + args）</option>
+                        </select>
                       </label>
+                      {mcpTransport === "stdio" ? (
+                        <>
+                          <label>
+                            STDIO Command
+                            <input
+                              type="text"
+                              value={mcpCommand}
+                              onChange={(event) => setMcpCommand(event.target.value)}
+                              placeholder="例如：npx"
+                              maxLength={260}
+                              required
+                            />
+                          </label>
+                          <label>
+                            STDIO Args（逗号分隔）
+                            <input
+                              type="text"
+                              value={mcpArgs}
+                              onChange={(event) => setMcpArgs(event.target.value)}
+                              placeholder="-y, @modelcontextprotocol/server-github"
+                              maxLength={3000}
+                            />
+                          </label>
+                          <label>
+                            STDIO Env（JSON，对象格式）
+                            <textarea
+                              value={mcpEnvText}
+                              onChange={(event) => setMcpEnvText(event.target.value)}
+                              rows={4}
+                              placeholder='{"GITHUB_PERSONAL_ACCESS_TOKEN":"xxx"}'
+                              maxLength={4000}
+                            />
+                          </label>
+                          <label>
+                            STDIO CWD（可选）
+                            <input
+                              type="text"
+                              value={mcpCwd}
+                              onChange={(event) => setMcpCwd(event.target.value)}
+                              placeholder="/path/to/workdir"
+                              maxLength={500}
+                            />
+                          </label>
+                        </>
+                      ) : (
+                        <>
+                          <label>
+                            MCP Endpoint URL
+                            <input
+                              type="url"
+                              value={mcpEndpointUrl}
+                              onChange={(event) => setMcpEndpointUrl(event.target.value)}
+                              placeholder={
+                                mcpTransport === "sse"
+                                  ? "https://your-mcp-server.example.com/sse"
+                                  : "https://your-mcp-server.example.com/mcp"
+                              }
+                              maxLength={500}
+                              required
+                            />
+                          </label>
+                          <label>
+                            Headers（JSON，对象格式）
+                            <textarea
+                              value={mcpHeadersText}
+                              onChange={(event) => setMcpHeadersText(event.target.value)}
+                              rows={4}
+                              placeholder='{"Authorization":"Bearer xxx"}'
+                              maxLength={4000}
+                            />
+                          </label>
+                        </>
+                      )}
                       <label>
                         Mode 偏好
                         <select
@@ -1568,17 +1693,6 @@ export default function QaAssistant() {
                           maxLength={2000}
                         />
                       </label>
-                      <label>
-                        Headers（JSON，对象格式）
-                        <textarea
-                          value={mcpHeadersText}
-                          onChange={(event) => setMcpHeadersText(event.target.value)}
-                          rows={4}
-                          placeholder='{"Authorization":"Bearer xxx"}'
-                          maxLength={4000}
-                        />
-                      </label>
-
                       <div className="admin-skill-manager-actions">
                         <button type="submit" disabled={mcpSubmitting || mcpTesting}>
                           {mcpSubmitting ? "创建中..." : "创建 MCP 模块"}
@@ -1612,8 +1726,12 @@ export default function QaAssistant() {
                               <h4>{item.label}</h4>
                               <p>{item.description}</p>
                               <small>
-                                {item.endpointUrl} · {item.isEnabled ? "enabled" : "disabled"} · mode:{" "}
-                                {item.modeHint}
+                                {item.transport} ·{" "}
+                                {item.transport === "stdio"
+                                  ? String(item.connectionConfig?.command || "unknown command")
+                                  : item.endpointUrl}{" "}
+                                ·{" "}
+                                {item.isEnabled ? "enabled" : "disabled"} · mode: {item.modeHint}
                               </small>
                             </div>
                             <div className="admin-skill-manager-actions">

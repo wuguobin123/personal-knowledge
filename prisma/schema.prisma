@@ -79,6 +79,7 @@ model QaMcpModule {
   transport     QaMcpTransport @default(STREAMABLE_HTTP)
   endpointUrl   String         @db.VarChar(500)
   headers       Json?
+  connectionConfig Json?
   keywordHints  Json?
   toolAllowlist Json?
   modeHint      QaSkillMode    @default(AUTO)
@@ -167,6 +168,8 @@ enum QaSkillSource {
 
 enum QaMcpTransport {
   STREAMABLE_HTTP
+  SSE
+  STDIO
 }
 
 enum QaConversationMessageRole {

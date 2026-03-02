@@ -1,6 +1,7 @@
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { ChatOpenAI } from "@langchain/openai";
+import { parseMcpStdioConfig, postJsonRpcViaStdio } from "@/lib/qa/mcp-stdio";
 import { listEnabledQaMcpModules, type QaMcpModule } from "@/lib/qa/mcp-modules";
 import type { QaMessage, QaMode } from "@/lib/qa/multi-agent";
 
@@ -37,7 +38,7 @@ type JsonRpcRequest = {
 
 type JsonRpcResponse = {
   jsonrpc?: "2.0";
-  id?: number;
+  id?: number | string;
   result?: unknown;
   error?: {
     code?: number;
@@ -172,10 +173,47 @@ function createRpcAbortController(timeoutMs: number, signal?: AbortSignal) {
 
   return {
     signal: controller.signal,
+    abort(reason?: unknown) {
+      controller.abort(reason);
+    },
     cleanup() {
       clearTimeout(timer);
     },
   };
+}
+
+function resolveSseMessageEndpoint(endpointUrl: string, raw: string) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return "";
+
+  let candidate = trimmed;
+  if (
+    (candidate.startsWith('"') && candidate.endsWith('"')) ||
+    (candidate.startsWith("'") && candidate.endsWith("'"))
+  ) {
+    candidate = candidate.slice(1, -1).trim();
+  }
+
+  if (candidate.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(candidate) as Record<string, unknown>;
+      const dynamic =
+        (typeof parsed.endpoint === "string" && parsed.endpoint) ||
+        (typeof parsed.messageUrl === "string" && parsed.messageUrl) ||
+        (typeof parsed.url === "string" && parsed.url) ||
+        "";
+      candidate = dynamic.trim();
+    } catch {
+      // ignore non-JSON endpoint payload
+    }
+  }
+
+  if (!candidate) return "";
+  try {
+    return new URL(candidate, endpointUrl).toString();
+  } catch {
+    return "";
+  }
 }
 
 async function parseRpcResponseBody(response: Response) {
@@ -216,13 +254,223 @@ async function parseRpcResponseBody(response: Response) {
   throw new Error(`MCP returned unsupported response: ${rawText.slice(0, 260)}`);
 }
 
-async function postJsonRpc(input: {
+async function postToSseMessageEndpoint(input: {
+  messageEndpoint: string;
+  module: QaMcpModule;
+  request: JsonRpcRequest;
+  signal: AbortSignal;
+}) {
+  const response = await fetch(input.messageEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      ...input.module.headers,
+    },
+    body: JSON.stringify(input.request),
+    signal: input.signal,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`HTTP ${response.status}: ${text.slice(0, 260)}`);
+  }
+}
+
+async function postJsonRpcViaSse(input: {
   module: QaMcpModule;
   request: JsonRpcRequest;
   signal?: AbortSignal;
 }) {
   const timeoutMs = getMcpTimeoutMs();
-  const { signal, cleanup } = createRpcAbortController(timeoutMs, input.signal);
+  const controller = createRpcAbortController(timeoutMs, input.signal);
+
+  try {
+    const sseResponse = await fetch(input.module.endpointUrl, {
+      method: "GET",
+      headers: {
+        Accept: "text/event-stream",
+        ...input.module.headers,
+      },
+      signal: controller.signal,
+    });
+
+    if (!sseResponse.ok) {
+      const text = await sseResponse.text().catch(() => "");
+      throw new Error(`HTTP ${sseResponse.status}: ${text.slice(0, 260)}`);
+    }
+
+    if (!sseResponse.body) {
+      throw new Error("MCP SSE endpoint returned empty response body.");
+    }
+
+    const reader = sseResponse.body.getReader();
+    const decoder = new TextDecoder();
+    const expectedId = input.request.id;
+    const expectResponse = expectedId !== undefined;
+
+    let buffer = "";
+    let eventName = "";
+    let dataLines: string[] = [];
+    let messageEndpoint = "";
+    let postPromise: Promise<void> | null = null;
+    let matchedResponse: JsonRpcResponse | null = null;
+
+    const handleEvent = async () => {
+      const currentEvent = eventName.trim();
+      const currentData = dataLines.join("\n").trim();
+      eventName = "";
+      dataLines = [];
+
+      if (!currentData) {
+        return false;
+      }
+
+      if (
+        !messageEndpoint &&
+        (currentEvent === "endpoint" || currentEvent === "message-endpoint" || !currentEvent)
+      ) {
+        const resolved = resolveSseMessageEndpoint(input.module.endpointUrl, currentData);
+        if (resolved) {
+          messageEndpoint = resolved;
+          postPromise = postToSseMessageEndpoint({
+            messageEndpoint,
+            module: input.module,
+            request: input.request,
+            signal: controller.signal,
+          });
+          if (!expectResponse) {
+            await postPromise;
+            return true;
+          }
+        }
+        return false;
+      }
+
+      if (!expectResponse) {
+        return false;
+      }
+
+      if (currentData === "[DONE]") {
+        return false;
+      }
+
+      try {
+        const payload = normalizeRpcEnvelope(JSON.parse(currentData));
+        if (payload.id === expectedId) {
+          matchedResponse = payload;
+          return true;
+        }
+      } catch {
+        // Ignore non-JSON event payloads.
+      }
+      return false;
+    };
+
+    try {
+      let completed = false;
+      while (!completed) {
+        const { done, value } = await reader.read();
+        if (done) {
+          if (dataLines.length > 0) {
+            const shouldStop = await handleEvent();
+            if (shouldStop) {
+              completed = true;
+            }
+          }
+          if (postPromise) {
+            await postPromise;
+          }
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        while (true) {
+          const newlineIndex = buffer.indexOf("\n");
+          if (newlineIndex < 0) break;
+
+          let line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+          if (line.endsWith("\r")) {
+            line = line.slice(0, -1);
+          }
+
+          if (!line) {
+            const shouldStop = await handleEvent();
+            if (shouldStop) {
+              completed = true;
+              break;
+            }
+            continue;
+          }
+
+          if (line.startsWith(":")) {
+            continue;
+          }
+
+          if (line.startsWith("event:")) {
+            eventName = line.slice(6).trim();
+            continue;
+          }
+
+          if (line.startsWith("data:")) {
+            dataLines.push(line.slice(5).trimStart());
+          }
+        }
+      }
+    } finally {
+      await reader.cancel().catch(() => {});
+    }
+
+    if (!messageEndpoint) {
+      throw new Error("MCP SSE handshake failed: endpoint event not received.");
+    }
+
+    if (postPromise) {
+      await postPromise;
+    }
+
+    if (!expectResponse) {
+      return {} as JsonRpcResponse;
+    }
+
+    if (matchedResponse) {
+      return matchedResponse;
+    }
+
+    throw new Error("MCP SSE did not return a JSON-RPC response for the request id.");
+  } finally {
+    controller.abort();
+    controller.cleanup();
+  }
+}
+
+async function postJsonRpc(input: {
+  module: QaMcpModule;
+  request: JsonRpcRequest;
+  signal?: AbortSignal;
+}) {
+  if (input.module.transport === "stdio") {
+    const stdioConfig = parseMcpStdioConfig(input.module.connectionConfig || {});
+    if (!stdioConfig) {
+      throw new Error("MCP stdio config is invalid. command is required.");
+    }
+
+    return postJsonRpcViaStdio({
+      config: stdioConfig,
+      request: input.request,
+      signal: input.signal,
+      timeoutMs: getMcpTimeoutMs(),
+      autoInitialize: true,
+    });
+  }
+
+  if (input.module.transport === "sse") {
+    return postJsonRpcViaSse(input);
+  }
+
+  const timeoutMs = getMcpTimeoutMs();
+  const controller = createRpcAbortController(timeoutMs, input.signal);
 
   try {
     const response = await fetch(input.module.endpointUrl, {
@@ -233,7 +481,7 @@ async function postJsonRpc(input: {
         ...input.module.headers,
       },
       body: JSON.stringify(input.request),
-      signal,
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -243,7 +491,7 @@ async function postJsonRpc(input: {
 
     return await parseRpcResponseBody(response);
   } finally {
-    cleanup();
+    controller.cleanup();
   }
 }
 

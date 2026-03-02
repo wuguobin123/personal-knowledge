@@ -250,7 +250,10 @@ curl -X POST http://localhost:3000/api/articles \
 
 Q&A MCP 配置（后台 `/admin` -> Q&A Assistant -> 添加 Skill -> MCP 模块）：
 
-1. 手动录入 MCP endpoint（Streamable HTTP）和可选 headers。
+1. 支持三种接入格式：
+   - `Streamable HTTP`：填写 `endpointUrl`（或 `url`）和可选 `headers`
+   - `SSE (Legacy)`：填写 `endpointUrl`（或 `url`）和可选 `headers`
+   - `STDIO`：填写 `command`、可选 `args/env/cwd`（兼容 Cursor/Claude Desktop 常见 `command + args + env` 结构）
 2. 可配置关键词提示、工具白名单和 mode 偏好（Auto/Blog/Web）。
 3. 问答时系统会先自动评估是否需要调用 MCP 工具，再把结果注入回答上下文。
 

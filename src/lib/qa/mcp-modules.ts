@@ -1,7 +1,8 @@
+import { parseMcpStdioConfig } from "@/lib/qa/mcp-stdio";
 import { prisma } from "@/lib/prisma";
 import type { QaSkillModeHint } from "@/lib/qa/skills-catalog";
 
-export type QaMcpTransport = "streamable_http";
+export type QaMcpTransport = "streamable_http" | "sse" | "stdio";
 
 export type QaMcpModule = {
   id: number;
@@ -11,6 +12,7 @@ export type QaMcpModule = {
   transport: QaMcpTransport;
   endpointUrl: string;
   headers: Record<string, string>;
+  connectionConfig: Record<string, unknown>;
   keywordHints: string[];
   toolAllowlist: string[];
   modeHint: QaSkillModeHint;
@@ -27,6 +29,7 @@ type DbQaMcpModuleRow = {
   transport: string;
   endpointUrl: string;
   headers: unknown;
+  connectionConfig: unknown;
   keywordHints: unknown;
   toolAllowlist: unknown;
   modeHint: string;
@@ -59,7 +62,20 @@ function normalizeModeHint(value: string): QaSkillModeHint {
 }
 
 function normalizeTransport(value: string): QaMcpTransport {
-  return value.toLowerCase() === "streamable_http" ? "streamable_http" : "streamable_http";
+  const normalized = value.toLowerCase();
+  if (normalized === "sse") {
+    return "sse";
+  }
+  if (normalized === "stdio") {
+    return "stdio";
+  }
+  return "streamable_http";
+}
+
+function toDbTransport(value: QaMcpTransport) {
+  if (value === "sse") return "SSE";
+  if (value === "stdio") return "STDIO";
+  return "STREAMABLE_HTTP";
 }
 
 function normalizeBoolean(value: boolean | number): boolean {
@@ -117,6 +133,25 @@ function normalizeHeaders(value: unknown) {
   return normalized;
 }
 
+function normalizeConnectionConfig(value: unknown) {
+  const parsed = parsePossiblyJson(value);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {} as Record<string, unknown>;
+  }
+
+  const stdioConfig = parseMcpStdioConfig(parsed);
+  if (stdioConfig) {
+    return {
+      command: stdioConfig.command,
+      args: stdioConfig.args,
+      env: stdioConfig.env,
+      ...(stdioConfig.cwd ? { cwd: stdioConfig.cwd } : {}),
+    };
+  }
+
+  return parsed as Record<string, unknown>;
+}
+
 function mapDbMcpModule(row: DbQaMcpModuleRow): QaMcpModule {
   return {
     id: row.id,
@@ -126,6 +161,7 @@ function mapDbMcpModule(row: DbQaMcpModuleRow): QaMcpModule {
     transport: normalizeTransport(row.transport),
     endpointUrl: row.endpointUrl,
     headers: normalizeHeaders(row.headers),
+    connectionConfig: normalizeConnectionConfig(row.connectionConfig),
     keywordHints: normalizeStringArray(row.keywordHints),
     toolAllowlist: normalizeStringArray(row.toolAllowlist),
     modeHint: normalizeModeHint(row.modeHint),
@@ -177,7 +213,7 @@ async function queryQaMcpModuleByKey(moduleKey: string) {
   const rows = await prisma.$queryRaw<DbQaMcpModuleRow[]>`
     SELECT
       id, moduleKey, label, description, transport, endpointUrl, headers, keywordHints, toolAllowlist,
-      modeHint, isEnabled, createdAt, updatedAt
+      connectionConfig, modeHint, isEnabled, createdAt, updatedAt
     FROM QaMcpModule
     WHERE moduleKey = ${moduleKey}
     LIMIT 1
@@ -192,7 +228,7 @@ export async function listQaMcpModules(input: { enabledOnly?: boolean } = {}) {
       ? await prisma.$queryRaw<DbQaMcpModuleRow[]>`
           SELECT
             id, moduleKey, label, description, transport, endpointUrl, headers, keywordHints, toolAllowlist,
-            modeHint, isEnabled, createdAt, updatedAt
+            connectionConfig, modeHint, isEnabled, createdAt, updatedAt
           FROM QaMcpModule
           WHERE isEnabled = 1
           ORDER BY createdAt DESC, id DESC
@@ -200,7 +236,7 @@ export async function listQaMcpModules(input: { enabledOnly?: boolean } = {}) {
       : await prisma.$queryRaw<DbQaMcpModuleRow[]>`
           SELECT
             id, moduleKey, label, description, transport, endpointUrl, headers, keywordHints, toolAllowlist,
-            modeHint, isEnabled, createdAt, updatedAt
+            connectionConfig, modeHint, isEnabled, createdAt, updatedAt
           FROM QaMcpModule
           ORDER BY createdAt DESC, id DESC
         `;
@@ -221,8 +257,10 @@ export async function listEnabledQaMcpModules() {
 export async function createQaMcpModule(input: {
   label: string;
   description: string;
+  transport?: QaMcpTransport;
   endpointUrl: string;
   headers?: Record<string, string>;
+  connectionConfig?: Record<string, unknown>;
   keywordHints?: string[];
   toolAllowlist?: string[];
   modeHint: QaSkillModeHint;
@@ -231,9 +269,14 @@ export async function createQaMcpModule(input: {
   const baseKey = `mcp-${normalizeModuleKeyPart(input.label)}`;
   const moduleKey = await nextAvailableModuleKey(baseKey);
   const isEnabled = input.isEnabled ?? true;
+  const transport = input.transport || "streamable_http";
 
   const headersJson =
     input.headers && Object.keys(input.headers).length > 0 ? JSON.stringify(input.headers) : null;
+  const connectionConfigJson =
+    input.connectionConfig && Object.keys(input.connectionConfig).length > 0
+      ? JSON.stringify(input.connectionConfig)
+      : null;
   const keywordHintsJson =
     input.keywordHints && input.keywordHints.length > 0 ? JSON.stringify(input.keywordHints) : null;
   const toolAllowlistJson =
@@ -241,16 +284,17 @@ export async function createQaMcpModule(input: {
 
   await prisma.$executeRaw`
     INSERT INTO QaMcpModule (
-      moduleKey, label, description, transport, endpointUrl, headers, keywordHints, toolAllowlist,
+      moduleKey, label, description, transport, endpointUrl, headers, connectionConfig, keywordHints, toolAllowlist,
       modeHint, isEnabled, createdAt, updatedAt
     )
     VALUES (
       ${moduleKey},
       ${input.label},
       ${input.description},
-      'STREAMABLE_HTTP',
+      ${toDbTransport(transport)},
       ${input.endpointUrl},
       ${headersJson},
+      ${connectionConfigJson},
       ${keywordHintsJson},
       ${toolAllowlistJson},
       ${input.modeHint.toUpperCase()},

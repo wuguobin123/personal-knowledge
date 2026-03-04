@@ -2,6 +2,10 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { getAdminSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  buildQaFileAttachmentContext,
+  getQaFilesByIdsForUser,
+} from "@/lib/qa/qa-files";
 import { DEFAULT_QA_SKILL_ID } from "@/lib/qa/skills-catalog";
 import { runQaSkillStream } from "@/lib/qa/skills-runtime";
 import type { QaMessage } from "@/lib/qa/multi-agent";
@@ -12,6 +16,15 @@ const requestSchema = z.object({
   sessionId: z.number().int().positive().optional(),
   mode: z.enum(["auto", "blog", "web"]).optional().default("auto"),
   skillId: z.string().trim().min(1).max(120).optional().default(DEFAULT_QA_SKILL_ID),
+  attachments: z
+    .array(
+      z.object({
+        fileId: z.number().int().positive(),
+      }),
+    )
+    .max(8)
+    .optional()
+    .default([]),
   messages: z
     .array(
       z.object({
@@ -91,6 +104,16 @@ function pickLatestUserMessage(messages: RequestPayload["messages"]) {
     }
   }
   return null;
+}
+
+function normalizeAttachmentIds(attachments: RequestPayload["attachments"]) {
+  return Array.from(
+    new Set(
+      (attachments || [])
+        .map((item) => Number(item.fileId))
+        .filter((value) => Number.isInteger(value) && value > 0),
+    ),
+  );
 }
 
 function buildConversationTitle(content: string) {
@@ -342,6 +365,28 @@ export async function POST(request: Request) {
       return Response.json({ error: "No user message found." }, { status: 400 });
     }
 
+    const attachmentIds = normalizeAttachmentIds(parsed.data.attachments);
+    const attachmentFiles =
+      attachmentIds.length > 0
+        ? await getQaFilesByIdsForUser({
+            userId: session.username,
+            fileIds: attachmentIds,
+            limit: 8,
+          })
+        : [];
+    if (attachmentIds.length > 0 && attachmentFiles.length !== attachmentIds.length) {
+      return Response.json(
+        { error: "Some attachments are missing, expired or not accessible." },
+        { status: 400 },
+      );
+    }
+    const attachmentContext = buildQaFileAttachmentContext(attachmentFiles);
+    const attachmentMeta = attachmentFiles.map((item) => ({
+      fileId: item.id,
+      fileName: item.fileName,
+      sheetCount: Array.isArray(item.sheetMeta?.sheets) ? item.sheetMeta.sheets.length : 0,
+    }));
+
     const conversationId = await resolveConversationId({
       sessionId: parsed.data.sessionId,
       userId: session.username,
@@ -358,9 +403,26 @@ export async function POST(request: Request) {
       content: latestUserMessage.content,
       mode: parsed.data.mode,
       skillId: parsed.data.skillId,
+      ...(attachmentMeta.length > 0
+        ? {
+            meta: toPrismaJson({
+              attachments: attachmentMeta,
+            }),
+          }
+        : {}),
     });
     const userMessageId = savedUserMessage.id;
     const shortTermMessages = await loadShortTermMemoryMessages(conversationId, 20);
+    const messagesForModelBase = shortTermMessages.length > 0 ? shortTermMessages : parsed.data.messages;
+    const messagesForModel = attachmentContext
+      ? [
+          ...messagesForModelBase,
+          {
+            role: "assistant" as const,
+            content: attachmentContext,
+          },
+        ]
+      : messagesForModelBase;
 
     const encoder = new TextEncoder();
 
@@ -383,7 +445,7 @@ export async function POST(request: Request) {
           const result = await runQaSkillStream(
             {
               mode: parsed.data.mode,
-              messages: shortTermMessages.length > 0 ? shortTermMessages : parsed.data.messages,
+              messages: messagesForModel,
               skillId: parsed.data.skillId,
             },
             {
@@ -433,6 +495,7 @@ export async function POST(request: Request) {
               mcpToolName: result.mcpToolName,
               mcpReason: result.mcpReason,
               mcpError: result.mcpError,
+              attachments: attachmentMeta,
             }),
           });
 

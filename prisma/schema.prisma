@@ -143,6 +143,21 @@ model QaConversationMessage {
   @@index([parentMessageId])
 }
 
+model QaFile {
+  id          Int      @id @default(autoincrement())
+  userId      String   @db.VarChar(120)
+  fileName    String   @db.VarChar(260)
+  mimeType    String   @db.VarChar(120)
+  sizeBytes   Int
+  storagePath String   @db.VarChar(500)
+  sheetMeta   Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
 enum ArticleSourceType {
   ORIGINAL
   CRAWLER

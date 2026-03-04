@@ -5837,3 +5837,111 @@ p {
     --assistant-compose-height: 240px;
   }
 }
+
+.admin-assistant-attachments {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.admin-assistant-attachments-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-assistant-attachments-actions button {
+  border: 1px solid #1f2937;
+  background: #fff;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.admin-assistant-attachments-actions span {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.admin-assistant-file-error {
+  margin: 0;
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.admin-assistant-attached-list,
+.admin-assistant-recent-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-assistant-attached-list button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #0f172a;
+  background: #0f172a;
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.admin-assistant-attached-list button small {
+  color: #cbd5e1;
+}
+
+.admin-assistant-recent-files button {
+  border: 1px dashed #94a3b8;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #111827;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  min-width: 160px;
+  cursor: pointer;
+}
+
+.admin-assistant-recent-files button strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.admin-assistant-recent-files button span {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.admin-assistant-recent-files button.is-active {
+  border-style: solid;
+  border-color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.markdown-chart {
+  margin: 14px 0;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.markdown-chart h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #111827;
+}
+
+.markdown-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}

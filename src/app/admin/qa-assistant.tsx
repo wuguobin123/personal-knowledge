@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import MarkdownRenderer from "@/components/markdown-renderer";
 import {
   DEFAULT_QA_SKILL_ID,
@@ -103,6 +103,24 @@ type QaPersistedMessage = {
   meta?: unknown;
 };
 
+type QaUploadedFileSheet = {
+  sheetName: string;
+  rowCount: number;
+  columns: string[];
+};
+
+type QaUploadedFile = {
+  id: number;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+  sheetMeta: {
+    format?: string;
+    sheets?: QaUploadedFileSheet[];
+  } | null;
+};
+
 function createInitialMessage(): UiMessage {
   return {
     id: `assistant-initial-${Date.now()}`,
@@ -134,6 +152,13 @@ function timeLabel(timestamp: number) {
 
 function normalizeForApi(messages: UiMessage[]) {
   return messages.map((item) => ({ role: item.role, content: item.content }));
+}
+
+function normalizeAttachmentsForApi(files: QaUploadedFile[]) {
+  return files
+    .map((item) => ({ fileId: Number(item.id) }))
+    .filter((item) => Number.isInteger(item.fileId) && item.fileId > 0)
+    .slice(0, 8);
 }
 
 function formatReferences(references: QaReference[]) {
@@ -253,6 +278,65 @@ async function parseApiError(response: Response, fallback: string) {
     return data.error;
   }
   return fallback;
+}
+
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0B";
+  }
+  if (value < 1024) return `${Math.round(value)}B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)}KB`;
+  return `${(value / (1024 * 1024)).toFixed(2)}MB`;
+}
+
+function normalizeUploadedFile(raw: unknown): QaUploadedFile | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const data = raw as Record<string, unknown>;
+  const id = Number(data.id);
+  const fileName = typeof data.fileName === "string" ? data.fileName.trim() : "";
+  const mimeType = typeof data.mimeType === "string" ? data.mimeType : "";
+  const sizeBytes = Number(data.sizeBytes);
+  const createdAt = typeof data.createdAt === "string" ? data.createdAt : "";
+  if (!Number.isInteger(id) || id <= 0 || !fileName || !createdAt || !Number.isFinite(sizeBytes)) {
+    return null;
+  }
+
+  const rawSheetMeta =
+    data.sheetMeta && typeof data.sheetMeta === "object" && !Array.isArray(data.sheetMeta)
+      ? (data.sheetMeta as Record<string, unknown>)
+      : null;
+  const rawSheets = Array.isArray(rawSheetMeta?.sheets) ? rawSheetMeta.sheets : [];
+  const sheets = rawSheets
+    .map((sheet) => {
+      if (!sheet || typeof sheet !== "object" || Array.isArray(sheet)) return null;
+      const item = sheet as Record<string, unknown>;
+      const sheetName = typeof item.sheetName === "string" ? item.sheetName.trim() : "";
+      const rowCount = Number(item.rowCount);
+      const columns = Array.isArray(item.columns)
+        ? item.columns
+            .filter((col): col is string => typeof col === "string")
+            .map((col) => col.trim())
+            .filter(Boolean)
+            .slice(0, 20)
+        : [];
+      if (!sheetName || !Number.isFinite(rowCount)) return null;
+      return { sheetName, rowCount: Math.max(0, Math.floor(rowCount)), columns } satisfies QaUploadedFileSheet;
+    })
+    .filter((item): item is QaUploadedFileSheet => Boolean(item));
+
+  return {
+    id,
+    fileName,
+    mimeType,
+    sizeBytes: Math.max(0, Math.floor(sizeBytes)),
+    createdAt,
+    sheetMeta: rawSheetMeta
+      ? {
+          ...(typeof rawSheetMeta.format === "string" ? { format: rawSheetMeta.format } : {}),
+          sheets,
+        }
+      : null,
+  };
 }
 
 function parseDelimitedList(raw: string) {
@@ -462,10 +546,15 @@ function AssistantMessage({
 export default function QaAssistant() {
   const SKILL_PAGE_SIZE = 8;
   const feedRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<UiMessage[]>([createInitialMessage()]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState<QaUploadedFile[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<QaUploadedFile[]>([]);
+  const [fileUploading, setFileUploading] = useState(false);
+  const [fileError, setFileError] = useState("");
   const [qaSessionId, setQaSessionId] = useState<number | null>(null);
   const [sessionHydrating, setSessionHydrating] = useState(false);
   const [sessionCreating, setSessionCreating] = useState(false);
@@ -532,6 +621,10 @@ export default function QaAssistant() {
   }, []);
 
   useEffect(() => {
+    void loadQaFiles();
+  }, []);
+
+  useEffect(() => {
     if (!showSkillManager) return;
 
     function onKeyDown(event: globalThis.KeyboardEvent) {
@@ -550,6 +643,96 @@ export default function QaAssistant() {
     }
     void loadMcpModules();
   }, [showSkillManager, skillModalTab, skillManagerTab]);
+
+  async function loadQaFiles() {
+    setFileError("");
+    try {
+      const response = await fetch("/api/admin/qa/files?limit=20", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, "Failed to load uploaded files."));
+      }
+
+      const payload = (await response.json()) as { files?: unknown[] };
+      const files = (Array.isArray(payload.files) ? payload.files : [])
+        .map(normalizeUploadedFile)
+        .filter((item): item is QaUploadedFile => Boolean(item));
+      setUploadedFiles(files);
+      setAttachedFiles((previous) => {
+        const nextById = new Map(files.map((item) => [item.id, item] as const));
+        return previous
+          .map((item) => nextById.get(item.id) || item)
+          .filter((item, index, array) => array.findIndex((candidate) => candidate.id === item.id) === index)
+          .slice(0, 8);
+      });
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "Failed to load uploaded files.";
+      setFileError(message);
+    }
+  }
+
+  function removeAttachedFile(fileId: number) {
+    setAttachedFiles((previous) => previous.filter((item) => item.id !== fileId));
+  }
+
+  function toggleAttachFile(file: QaUploadedFile) {
+    setAttachedFiles((previous) => {
+      const exists = previous.some((item) => item.id === file.id);
+      if (exists) {
+        return previous.filter((item) => item.id !== file.id);
+      }
+      return [file, ...previous].slice(0, 8);
+    });
+  }
+
+  async function uploadTabularFile(file: File) {
+    if (!file) return;
+
+    setFileUploading(true);
+    setFileError("");
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      const response = await fetch("/api/admin/qa/files", {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, "Failed to upload file."));
+      }
+
+      const payload = (await response.json()) as { file?: unknown };
+      const uploaded = normalizeUploadedFile(payload.file);
+      if (!uploaded) {
+        throw new Error("Upload response is invalid.");
+      }
+
+      setUploadedFiles((previous) => {
+        const deduped = previous.filter((item) => item.id !== uploaded.id);
+        return [uploaded, ...deduped].slice(0, 20);
+      });
+      setAttachedFiles((previous) => {
+        const deduped = previous.filter((item) => item.id !== uploaded.id);
+        return [uploaded, ...deduped].slice(0, 8);
+      });
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "Failed to upload file.";
+      setFileError(message);
+    } finally {
+      setFileUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }
+
+  function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    void uploadTabularFile(file);
+  }
 
   const latestAssistantId = useMemo(() => {
     const latestAssistant = [...messages].reverse().find((item) => item.role === "assistant");
@@ -1062,6 +1245,7 @@ export default function QaAssistant() {
           sessionId: activeSessionId,
           mode,
           skillId,
+          attachments: normalizeAttachmentsForApi(attachedFiles),
           messages: normalizeForApi(requestMessages),
         }),
       });
@@ -1799,6 +1983,65 @@ export default function QaAssistant() {
             onKeyDown={handleKeyDown}
             disabled={loading || sessionCreating || sessionHydrating}
           />
+          <div className="admin-assistant-attachments">
+            <div className="admin-assistant-attachments-actions">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleFileInputChange}
+                hidden
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading || sessionCreating || sessionHydrating || fileUploading}
+              >
+                {fileUploading ? "上传中..." : "上传 Excel/CSV"}
+              </button>
+              <span>最多可附加 8 个文件</span>
+            </div>
+
+            {fileError ? <p className="admin-assistant-file-error">{fileError}</p> : null}
+
+            {attachedFiles.length > 0 ? (
+              <div className="admin-assistant-attached-list">
+                {attachedFiles.map((file) => (
+                  <button
+                    key={file.id}
+                    type="button"
+                    onClick={() => removeAttachedFile(file.id)}
+                    title={`移除 ${file.fileName}`}
+                    disabled={loading || sessionCreating || sessionHydrating}
+                  >
+                    {file.fileName}
+                    <small>{formatBytes(file.sizeBytes)}</small>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {uploadedFiles.length > 0 ? (
+              <div className="admin-assistant-recent-files">
+                {uploadedFiles.map((file) => {
+                  const attached = attachedFiles.some((item) => item.id === file.id);
+                  const sheetCount = Array.isArray(file.sheetMeta?.sheets) ? file.sheetMeta.sheets.length : 0;
+                  return (
+                    <button
+                      key={file.id}
+                      type="button"
+                      className={attached ? "is-active" : undefined}
+                      onClick={() => toggleAttachFile(file)}
+                      disabled={loading || sessionCreating || sessionHydrating}
+                    >
+                      <strong>{file.fileName}</strong>
+                      <span>{sheetCount > 0 ? `${sheetCount} sheets` : "无结构信息"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
           <div className="admin-assistant-compose-row">
             <div className="admin-assistant-compose-tools">
               <button

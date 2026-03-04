@@ -13,6 +13,7 @@
     "db:seed": "node prisma/seed.mjs",
     "ai-news:collect": "node scripts/collect-ai-news.mjs",
     "ai-news:scheduler": "node scripts/ai-news-scheduler.mjs",
+    "mcp:excel-profile": "node scripts/mcp-excel-profile-server.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -31,6 +32,7 @@
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {

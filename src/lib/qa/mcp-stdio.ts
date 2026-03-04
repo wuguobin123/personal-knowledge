@@ -168,42 +168,6 @@ export async function postJsonRpcViaStdio(input: {
       finalize(() => resolve(payload));
     };
 
-    timer = setTimeout(() => {
-      fail("MCP stdio request timeout.");
-    }, input.timeoutMs);
-
-    if (input.signal) {
-      if (input.signal.aborted) {
-        fail(`MCP stdio aborted: ${String(input.signal.reason || "aborted")}`);
-        return;
-      }
-      input.signal.addEventListener(
-        "abort",
-        () => {
-          fail(`MCP stdio aborted: ${String(input.signal?.reason || "aborted")}`);
-        },
-        { once: true },
-      );
-    }
-
-    child.on("error", (error) => {
-      fail(`Failed to start MCP stdio process: ${error.message}`);
-    });
-
-    child.on("exit", (code, signal) => {
-      if (settled) return;
-      if (!expectResponse) {
-        succeed({});
-        return;
-      }
-      fail(`MCP stdio process exited before response (code=${String(code)}, signal=${String(signal)})`);
-    });
-
-    child.stderr?.on("data", (chunk: Buffer | string) => {
-      const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
-      stderrText = `${stderrText}${text}`.slice(-4000);
-    });
-
     const tryParseMessages = () => {
       while (true) {
         const headerEndIndex = stdoutBuffer.indexOf("\r\n\r\n");
@@ -245,6 +209,44 @@ export async function postJsonRpcViaStdio(input: {
       }
     };
 
+    timer = setTimeout(() => {
+      fail("MCP stdio request timeout.");
+    }, input.timeoutMs);
+
+    if (input.signal) {
+      if (input.signal.aborted) {
+        fail(`MCP stdio aborted: ${String(input.signal.reason || "aborted")}`);
+        return;
+      }
+      input.signal.addEventListener(
+        "abort",
+        () => {
+          fail(`MCP stdio aborted: ${String(input.signal?.reason || "aborted")}`);
+        },
+        { once: true },
+      );
+    }
+
+    child.on("error", (error) => {
+      fail(`Failed to start MCP stdio process: ${error.message}`);
+    });
+
+    child.on("exit", (code, signal) => {
+      if (settled) return;
+      tryParseMessages();
+      if (settled) return;
+      if (!expectResponse) {
+        succeed({});
+        return;
+      }
+      fail(`MCP stdio process exited before response (code=${String(code)}, signal=${String(signal)})`);
+    });
+
+    child.stderr?.on("data", (chunk: Buffer | string) => {
+      const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      stderrText = `${stderrText}${text}`.slice(-4000);
+    });
+
     child.stdout?.on("data", (chunk: Buffer | string) => {
       if (settled) return;
       const raw = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
@@ -262,9 +264,9 @@ export async function postJsonRpcViaStdio(input: {
         fail(`Failed to write MCP stdio request: ${error.message}`);
         return;
       }
-      child.stdin.end();
-
+      // Keep stdin open while waiting for response. Some MCP servers exit on EOF.
       if (!expectResponse) {
+        child.stdin?.end();
         setTimeout(() => {
           if (!settled) {
             succeed({});

@@ -123,6 +123,7 @@ export async function runQaSkillStream(
     messages: QaMessage[];
     mode: QaMode;
     skillId?: QaSkillId;
+    attachmentFileNames?: string[];
   },
   handlers: QaSkillRuntimeHandlers = {},
 ): Promise<QaSkillStreamResult> {
@@ -154,6 +155,7 @@ export async function runQaSkillStream(
     messages: input.messages,
     mode: effectiveMode,
     signal: handlers.signal,
+    attachmentFileNames: input.attachmentFileNames,
   });
   const messagesWithMcp = mcpExecution.contextMessage
     ? [...input.messages, mcpExecution.contextMessage]

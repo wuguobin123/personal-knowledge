@@ -5792,7 +5792,7 @@ p {
 /* QA assistant layout: fixed composer at bottom, messages scroll in upper panel */
 .admin-dash-main.is-assistant {
   --assistant-fixed-left: 270px;
-  --assistant-compose-height: 190px;
+  --assistant-compose-height: 280px;
 }
 
 .admin-assistant-page {
@@ -5802,7 +5802,7 @@ p {
 
 .admin-assistant-feed {
   overflow-y: auto;
-  padding-bottom: calc(var(--assistant-compose-height) + 65px);
+  padding-bottom: calc(var(--assistant-compose-height) + 24px);
 }
 
 .admin-assistant-compose {
@@ -5812,6 +5812,8 @@ p {
   bottom: 0;
   z-index: 90;
   margin: 0;
+  max-height: var(--assistant-compose-height);
+  overflow-y: auto;
   padding-top: 12px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid #dce6f2;
@@ -5828,20 +5830,21 @@ p {
 @media (max-width: 900px) {
   .admin-dash-main.is-assistant {
     --assistant-fixed-left: 0px;
-    --assistant-compose-height: 214px;
+    --assistant-compose-height: 300px;
   }
 }
 
 @media (max-width: 640px) {
   .admin-dash-main.is-assistant {
-    --assistant-compose-height: 240px;
+    --assistant-compose-height: 320px;
   }
 }
 
 .admin-assistant-attachments {
-  margin-top: 12px;
+  margin-top: 10px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  min-height: 0;
 }
 
 .admin-assistant-attachments-actions {
@@ -5849,6 +5852,7 @@ p {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .admin-assistant-attachments-actions button {
@@ -5873,57 +5877,104 @@ p {
   font-size: 12px;
 }
 
+.admin-assistant-attachments-files {
+  max-height: 100px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  display: grid;
+  gap: 6px;
+}
+
 .admin-assistant-attached-list,
 .admin-assistant-recent-files {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-height: 0;
 }
 
-.admin-assistant-attached-list button {
+.admin-assistant-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border-radius: 999px;
+  border: 1px solid #0f172a;
+  background: #0f172a;
+  overflow: hidden;
+}
+
+.admin-assistant-file-chip > button:first-child {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid #0f172a;
-  background: #0f172a;
+  border: 0;
+  background: transparent;
   color: #fff;
-  border-radius: 999px;
-  padding: 6px 10px;
+  padding: 6px 8px 6px 10px;
   font-size: 12px;
   cursor: pointer;
 }
 
-.admin-assistant-attached-list button small {
+.admin-assistant-file-chip > button:first-child small {
   color: #cbd5e1;
 }
 
-.admin-assistant-recent-files button {
-  border: 1px dashed #94a3b8;
-  border-radius: 10px;
-  background: #f8fafc;
-  color: #111827;
-  padding: 8px 10px;
-  display: grid;
-  gap: 4px;
-  text-align: left;
-  min-width: 160px;
+.admin-assistant-file-chip-delete {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
   cursor: pointer;
 }
 
-.admin-assistant-recent-files button strong {
+.admin-assistant-file-chip-delete:hover {
+  background: rgba(220, 38, 38, 0.8);
+}
+
+.admin-assistant-attached-list .admin-assistant-file-chip {
+  border-color: #1e3a5f;
+  background: #1e3a5f;
+}
+
+.admin-assistant-recent-files .admin-assistant-file-chip {
+  border: 1px dashed #94a3b8;
+  background: #f8fafc;
+}
+
+.admin-assistant-recent-files .admin-assistant-file-chip > button:first-child {
+  color: #111827;
+  padding: 6px 8px 6px 10px;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+}
+
+.admin-assistant-recent-files .admin-assistant-file-chip-delete {
+  background: rgba(15, 23, 42, 0.08);
+  color: #475569;
+}
+
+.admin-assistant-recent-files .admin-assistant-file-chip-delete:hover {
+  background: rgba(220, 38, 38, 0.15);
+  color: #dc2626;
+}
+
+
+.admin-assistant-recent-files .admin-assistant-file-chip > button:first-child strong {
   font-size: 12px;
   line-height: 1.2;
 }
 
-.admin-assistant-recent-files button span {
+.admin-assistant-recent-files .admin-assistant-file-chip > button:first-child span {
   font-size: 11px;
   color: #6b7280;
-}
-
-.admin-assistant-recent-files button.is-active {
-  border-style: solid;
-  border-color: #1d4ed8;
-  background: #eff6ff;
 }
 
 .markdown-chart {

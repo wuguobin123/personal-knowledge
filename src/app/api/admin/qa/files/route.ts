@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { getAdminSession } from "@/lib/auth";
-import { createQaFileRecord, listQaFilesForUser } from "@/lib/qa/qa-files";
+import { createQaFileRecord, deleteQaFileForUser, listQaFilesForUser } from "@/lib/qa/qa-files";
 import { isSupportedTabularFile, parseTabularFileMeta } from "@/lib/qa/tabular-file";
 
 export const runtime = "nodejs";
@@ -171,6 +171,55 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Upload failed.";
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
+
+const deleteQuerySchema = z.object({
+  fileId: z.coerce.number().int().min(1),
+});
+
+export async function DELETE(request: Request) {
+  const session = await getAdminSession();
+  if (!session) {
+    return Response.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const parsed = deleteQuerySchema.safeParse({
+    fileId: searchParams.get("fileId") ?? undefined,
+  });
+  if (!parsed.success) {
+    return Response.json(
+      { error: "Invalid request. Provide fileId as query parameter." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const result = await deleteQaFileForUser({
+      userId: session.username,
+      fileId: parsed.data.fileId,
+    });
+    if (!result) {
+      return Response.json({ error: "File not found or already deleted." }, { status: 404 });
+    }
+
+    try {
+      await unlink(result.storagePath);
+    } catch {
+      // ignore if file already missing on disk
+    }
+    const manifestPath = path.join(MANIFEST_ROOT, `${result.id}.json`);
+    try {
+      await unlink(manifestPath);
+    } catch {
+      // ignore if manifest missing
+    }
+
+    return Response.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Delete failed.";
     return Response.json({ error: message }, { status: 500 });
   }
 }

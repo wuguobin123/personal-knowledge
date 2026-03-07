@@ -172,6 +172,19 @@ export async function listQaFilesForUser(input: { userId: string; limit?: number
   }
 }
 
+export async function deleteQaFileForUser(input: { userId: string; fileId: number }) {
+  const fileId = normalizePositiveInt(input.fileId, -1);
+  if (fileId <= 0) {
+    return null;
+  }
+  const file = await getQaFileById(fileId);
+  if (!file || file.userId !== input.userId) {
+    return null;
+  }
+  await prisma.$executeRaw`DELETE FROM QaFile WHERE id = ${fileId} AND userId = ${input.userId}`;
+  return { storagePath: file.storagePath, id: file.id };
+}
+
 export async function getQaFilesByIdsForUser(input: {
   userId: string;
   fileIds: number[];

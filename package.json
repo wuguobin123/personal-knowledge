@@ -14,11 +14,14 @@
     "ai-news:collect": "node scripts/collect-ai-news.mjs",
     "ai-news:scheduler": "node scripts/ai-news-scheduler.mjs",
     "mcp:excel-profile": "node scripts/mcp-excel-profile-server.mjs",
+    "mcp:list": "node scripts/list-mcp-modules.mjs",
+    "mcp:add-test": "node scripts/add-mcp-fetch-test.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {
     "@langchain/core": "^1.1.28",
     "@langchain/openai": "^1.2.10",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "@prisma/client": "^6.17.1",
     "ali-oss": "^6.23.0",
     "highlight.js": "^11.11.1",

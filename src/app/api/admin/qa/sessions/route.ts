@@ -38,57 +38,68 @@ function normalizeTitle(raw?: string) {
   return text || "新会话";
 }
 
+function formatSessionError(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return "Failed to load sessions.";
+}
+
 export async function GET(request: Request) {
-  const session = await getAdminSession();
-  if (!session) {
-    return Response.json({ error: "Unauthorized." }, { status: 401 });
-  }
+  try {
+    const session = await getAdminSession();
+    if (!session) {
+      return Response.json({ error: "Unauthorized." }, { status: 401 });
+    }
 
-  const parsed = listSessionQuerySchema.safeParse({
-    limit: new URL(request.url).searchParams.get("limit") || undefined,
-  });
-  if (!parsed.success) {
-    return Response.json(
-      { error: "Invalid request query.", details: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
+    const parsed = listSessionQuerySchema.safeParse({
+      limit: new URL(request.url).searchParams.get("limit") || undefined,
+    });
+    if (!parsed.success) {
+      return Response.json(
+        { error: "Invalid request query.", details: parsed.error.flatten() },
+        { status: 400 },
+      );
+    }
 
-  const sessions = await prisma.qaConversation.findMany({
-    where: {
-      userId: session.username,
-      status: {
-        not: "DELETED",
+    const sessions = await prisma.qaConversation.findMany({
+      where: {
+        userId: session.username,
+        status: {
+          not: "DELETED",
+        },
       },
-    },
-    orderBy: [{ lastMessageAt: "desc" }, { id: "desc" }],
-    take: parsed.data.limit,
-    select: {
-      id: true,
-      title: true,
-      status: true,
-      mode: true,
-      skillId: true,
-      messageCount: true,
-      lastMessageAt: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
+      orderBy: [{ lastMessageAt: "desc" }, { id: "desc" }],
+      take: parsed.data.limit,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        mode: true,
+        skillId: true,
+        messageCount: true,
+        lastMessageAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
-  return Response.json({
-    sessions: sessions.map((item) => ({
-      id: item.id,
-      title: item.title,
-      status: fromConversationStatus(item.status),
-      mode: fromSkillMode(item.mode),
-      skillId: item.skillId,
-      messageCount: item.messageCount,
-      lastMessageAt: item.lastMessageAt.toISOString(),
-      createdAt: item.createdAt.toISOString(),
-      updatedAt: item.updatedAt.toISOString(),
-    })),
-  });
+    return Response.json({
+      sessions: sessions.map((item) => ({
+        id: item.id,
+        title: item.title,
+        status: fromConversationStatus(item.status),
+        mode: fromSkillMode(item.mode),
+        skillId: item.skillId,
+        messageCount: item.messageCount,
+        lastMessageAt: item.lastMessageAt.toISOString(),
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    return Response.json({ error: formatSessionError(error) }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {

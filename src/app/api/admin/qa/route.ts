@@ -447,6 +447,10 @@ export async function POST(request: Request) {
               mode: parsed.data.mode,
               messages: messagesForModel,
               skillId: parsed.data.skillId,
+              attachmentFileNames:
+                attachmentMeta.length > 0
+                  ? attachmentMeta.map((a) => a.fileName)
+                  : undefined,
             },
             {
               signal: request.signal,

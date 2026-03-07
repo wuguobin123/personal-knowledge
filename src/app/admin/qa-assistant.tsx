@@ -621,10 +621,6 @@ export default function QaAssistant() {
   }, []);
 
   useEffect(() => {
-    void loadQaFiles();
-  }, []);
-
-  useEffect(() => {
     if (!showSkillManager) return;
 
     function onKeyDown(event: globalThis.KeyboardEvent) {
@@ -675,6 +671,22 @@ export default function QaAssistant() {
 
   function removeAttachedFile(fileId: number) {
     setAttachedFiles((previous) => previous.filter((item) => item.id !== fileId));
+  }
+
+  async function deleteUploadedFile(fileId: number) {
+    try {
+      const response = await fetch(`/api/admin/qa/files?fileId=${fileId}`, { method: "DELETE" });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        setFileError(typeof err?.error === "string" ? err.error : "删除失败");
+        return;
+      }
+      setUploadedFiles((prev) => prev.filter((item) => item.id !== fileId));
+      setAttachedFiles((prev) => prev.filter((item) => item.id !== fileId));
+      setFileError("");
+    } catch {
+      setFileError("删除失败");
+    }
   }
 
   function toggleAttachFile(file: QaUploadedFile) {
@@ -1976,7 +1988,7 @@ export default function QaAssistant() {
       <footer className="admin-assistant-compose">
         <div className="admin-assistant-compose-box">
           <textarea
-            rows={3}
+            rows={2}
             placeholder="输入你的问题..."
             value={input}
             onChange={(event) => setInput(event.target.value)}
@@ -2004,41 +2016,70 @@ export default function QaAssistant() {
 
             {fileError ? <p className="admin-assistant-file-error">{fileError}</p> : null}
 
-            {attachedFiles.length > 0 ? (
-              <div className="admin-assistant-attached-list">
-                {attachedFiles.map((file) => (
-                  <button
-                    key={file.id}
-                    type="button"
-                    onClick={() => removeAttachedFile(file.id)}
-                    title={`移除 ${file.fileName}`}
-                    disabled={loading || sessionCreating || sessionHydrating}
-                  >
-                    {file.fileName}
-                    <small>{formatBytes(file.sizeBytes)}</small>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-
-            {uploadedFiles.length > 0 ? (
-              <div className="admin-assistant-recent-files">
-                {uploadedFiles.map((file) => {
-                  const attached = attachedFiles.some((item) => item.id === file.id);
-                  const sheetCount = Array.isArray(file.sheetMeta?.sheets) ? file.sheetMeta.sheets.length : 0;
-                  return (
-                    <button
-                      key={file.id}
-                      type="button"
-                      className={attached ? "is-active" : undefined}
-                      onClick={() => toggleAttachFile(file)}
-                      disabled={loading || sessionCreating || sessionHydrating}
-                    >
-                      <strong>{file.fileName}</strong>
-                      <span>{sheetCount > 0 ? `${sheetCount} sheets` : "无结构信息"}</span>
-                    </button>
-                  );
-                })}
+            {(attachedFiles.length > 0 || (uploadedFiles.length > 0 && attachedFiles.length === 0)) ? (
+              <div className="admin-assistant-attachments-files">
+                {attachedFiles.length > 0 ? (
+                  <div className="admin-assistant-attached-list">
+                    {attachedFiles.map((file) => (
+                      <span key={file.id} className="admin-assistant-file-chip">
+                        <button
+                          type="button"
+                          onClick={() => removeAttachedFile(file.id)}
+                          title={`移除 ${file.fileName}`}
+                          disabled={loading || sessionCreating || sessionHydrating}
+                        >
+                          {file.fileName}
+                          <small>{formatBytes(file.sizeBytes)}</small>
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-assistant-file-chip-delete"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void deleteUploadedFile(file.id);
+                          }}
+                          title="删除并移除"
+                          disabled={loading || sessionCreating || sessionHydrating}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {uploadedFiles.length > 0 && attachedFiles.length === 0 ? (
+                  <div className="admin-assistant-recent-files">
+                    {uploadedFiles.map((file) => {
+                      const sheetCount = Array.isArray(file.sheetMeta?.sheets) ? file.sheetMeta.sheets.length : 0;
+                      return (
+                        <span key={file.id} className="admin-assistant-file-chip">
+                          <button
+                            type="button"
+                            onClick={() => toggleAttachFile(file)}
+                            disabled={loading || sessionCreating || sessionHydrating}
+                          >
+                            <strong>{file.fileName}</strong>
+                            <span>{sheetCount > 0 ? `${sheetCount} sheets` : "无结构信息"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-assistant-file-chip-delete"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void deleteUploadedFile(file.id);
+                            }}
+                            title="删除"
+                            disabled={loading || sessionCreating || sessionHydrating}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

@@ -17,9 +17,11 @@ export class McpStdioClient extends McpBaseClient {
 
   async connect(): Promise<void> {
     if (this.isConnected()) {
+      console.log(`[MCP:${this.module.moduleKey}] STDIO already connected`);
       return;
     }
 
+    console.log(`[MCP:${this.module.moduleKey}] STDIO connecting...`);
     this.updateState({ status: "connecting" });
 
     try {
@@ -27,6 +29,8 @@ export class McpStdioClient extends McpBaseClient {
       if (!config) {
         throw new Error("Invalid STDIO configuration: command is required");
       }
+
+      console.log(`[MCP:${this.module.moduleKey}] STDIO config: command=${config.command}, args=[${config.args.join(', ')}], cwd=${config.cwd || '(default)'}`);
 
       // 创建 STDIO 传输
       this.transport = new StdioClientTransport({
@@ -40,6 +44,7 @@ export class McpStdioClient extends McpBaseClient {
       this.client = this.createClient();
 
       // 建立连接
+      console.log(`[MCP:${this.module.moduleKey}] STDIO establishing connection...`);
       await this.client.connect(this.transport);
 
       this.updateState({ 
@@ -49,11 +54,13 @@ export class McpStdioClient extends McpBaseClient {
         error: undefined,
       });
 
-      console.log(`[MCP:${this.module.moduleKey}] STDIO client connected`);
+      console.log(`[MCP:${this.module.moduleKey}] ✓ STDIO client connected`);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[MCP:${this.module.moduleKey}] ✗ STDIO connection failed: ${message}`);
       this.updateState({ 
         status: "error", 
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
         retryCount: this.state.retryCount + 1,
       });
       throw error;

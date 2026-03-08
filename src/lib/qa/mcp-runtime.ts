@@ -22,8 +22,16 @@ export async function tryAutoRunQaMcpTool(input: {
   signal?: AbortSignal;
   attachmentFileNames?: string[];
 }): Promise<McpExecutionResult> {
+  console.log(`[qa:mcp-runtime] tryAutoRunQaMcpTool called: mode=${input.mode}`);
+  
   // 获取启用的模块
   const modules = await listEnabledQaMcpModules();
+  console.log(`[qa:mcp-runtime] Loaded ${modules.length} enabled modules from DB: ${modules.map(m => m.moduleKey).join(', ') || '(none)'}`);
+  
+  if (modules.length === 0) {
+    console.log(`[qa:mcp-runtime] No enabled MCP modules found`);
+    return { used: false, reason: "No enabled MCP modules" };
+  }
   
   // 转换为新模块格式
   const convertedModules = modules.map(convertToNewModule);

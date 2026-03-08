@@ -16,6 +16,7 @@
     "mcp:excel-profile": "node scripts/mcp-excel-profile-server.mjs",
     "mcp:list": "node scripts/list-mcp-modules.mjs",
     "mcp:add-test": "node scripts/add-mcp-fetch-test.mjs",
+    "mcp:add-free": "node scripts/add-mcp-free-tools.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

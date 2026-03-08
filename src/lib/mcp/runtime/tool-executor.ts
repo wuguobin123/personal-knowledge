@@ -245,9 +245,13 @@ export async function tryAutoRunMcpTool(input: {
   modules: McpModule[];
 }): Promise<McpExecutionResult> {
   const question = latestUserQuestion(input.messages);
+  console.log(`[qa:mcp:entry] Called with mode=${input.mode}, modules=${input.modules.length}, attachments=${input.attachmentFileNames?.length || 0}`);
+  
   if (!question) {
+    console.log(`[qa:mcp:entry] No user question found, skipping MCP`);
     return { used: false };
   }
+  console.log(`[qa:mcp:entry] User question: "${question.slice(0, 100)}..."`);
 
   const manager = getGlobalConnectionManager();
   
@@ -256,7 +260,11 @@ export async function tryAutoRunMcpTool(input: {
     module.isEnabled && moduleMatchesMode(module, input.mode)
   );
   
-  if (candidateModules.length === 0) {
+  console.log(`[qa:mcp:filter] Total modules: ${input.modules.length}, Candidates after mode filter (${input.mode}): ${candidateModules.length}`);
+  if (candidateModules.length > 0) {
+    console.log(`[qa:mcp:filter] Candidate modules: ${candidateModules.map(m => `${m.moduleKey}(modeHint=${m.modeHint})`).join(', ')}`);
+  } else {
+    console.log(`[qa:mcp:filter] No modules match mode=${input.mode}. All modules: ${input.modules.map(m => `${m.moduleKey}(modeHint=${m.modeHint},enabled=${m.isEnabled})`).join(', ')}`);
     return { used: false };
   }
 
@@ -267,9 +275,24 @@ export async function tryAutoRunMcpTool(input: {
   const discoveredTools: ToolDescriptor[] = [];
   const toolDiscoveryErrors: string[] = [];
   
+  console.log(`[qa:mcp:discovery] Starting tool discovery for ${candidateModules.length} modules...`);
+  console.log(`[qa:mcp:discovery] Candidate modules: ${candidateModules.map(m => `${m.moduleKey}(${m.transport})`).join(', ')}`);
+  
   for (const module of candidateModules) {
+    console.log(`[qa:mcp:discovery] --- Processing ${module.moduleKey} (${module.transport}) ---`);
+    console.log(`[qa:mcp:discovery] Checking if client is registered...`);
+    
+    const isRegistered = manager.isRegistered(module.moduleKey);
+    const isConnected = manager.isConnected(module.moduleKey);
+    console.log(`[qa:mcp:discovery] ${module.moduleKey}: registered=${isRegistered}, connected=${isConnected}`);
+    
     try {
+      console.log(`[qa:mcp:discovery] Calling listTools for ${module.moduleKey}...`);
       const tools = await manager.listTools(module.moduleKey);
+      console.log(`[qa:mcp:discovery] ✓ ${module.moduleKey}: discovered ${tools.length} tools`);
+      if (tools.length > 0) {
+        console.log(`[qa:mcp:discovery]   Tools: ${tools.map(t => t.name).join(', ')}`);
+      }
       discoveredTools.push(...tools.map(tool => ({
         module,
         name: tool.name,
@@ -279,11 +302,20 @@ export async function tryAutoRunMcpTool(input: {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown tool discovery error.";
       toolDiscoveryErrors.push(`${module.moduleKey}: ${message}`);
-      console.warn(`[qa:mcp] tools discovery failed for ${module.moduleKey}: ${message}`);
+      console.error(`[qa:mcp:discovery] ✗ ${module.moduleKey}: ${message}`);
+      if (error instanceof Error && error.stack) {
+        console.error(`[qa:mcp:discovery] Stack: ${error.stack}`);
+      }
     }
   }
 
+  console.log(`[qa:mcp:discovery] Summary: ${discoveredTools.length} tools discovered, ${toolDiscoveryErrors.length} errors`);
+  if (toolDiscoveryErrors.length > 0) {
+    console.error(`[qa:mcp:discovery] Errors:\n${toolDiscoveryErrors.join('\n')}`);
+  }
+
   if (discoveredTools.length === 0) {
+    console.error(`[qa:mcp:discovery] No tools discovered. Errors: ${toolDiscoveryErrors.join(" | ")}`);
     if (toolDiscoveryErrors.length > 0) {
       return {
         used: false,
@@ -337,23 +369,32 @@ export async function tryAutoRunMcpTool(input: {
   }
 
   if (!choice || choice.action !== "use_tool" || !choice.toolRef) {
+    console.log(`[qa:mcp:router] LLM decided to skip MCP tools. action=${choice?.action}, reason=${choice?.reason || "(none)"}`);
     return { used: false, reason: choice?.reason || "Router decided to skip MCP tools." };
   }
+  
+  console.log(`[qa:mcp:router] LLM selected tool: ${choice.toolRef}, args=${JSON.stringify(choice.arguments).slice(0, 200)}`);
 
   // 解析 toolRef: "moduleKey::toolName"
   const [moduleKey, toolName] = choice.toolRef.split("::");
+  console.log(`[qa:mcp:router] Parsed moduleKey=${moduleKey}, toolName=${toolName}`);
+  
   const selectedTool = discoveredTools.find(
     (item) => item.module.moduleKey === moduleKey && item.name === toolName
   );
   
   if (!selectedTool) {
+    console.error(`[qa:mcp:router] Tool not found in discovered tools. Available: ${discoveredTools.map(t => `${t.module.moduleKey}::${t.name}`).join(', ')}`);
     return { used: false, reason: "Router selected an unavailable MCP tool." };
   }
+  console.log(`[qa:mcp:router] Tool found: ${selectedTool.module.label}::${selectedTool.name}`);
 
   // 执行工具
+  console.log(`[qa:mcp:execute] Calling tool ${moduleKey}::${toolName}...`);
   try {
     const result = await manager.callTool(moduleKey, toolName, choice.arguments);
     const resultText = normalizeToolResult(result);
+    console.log(`[qa:mcp:execute] ✓ Tool executed successfully. Result length: ${resultText.length} chars`);
     
     return {
       used: true,
@@ -370,6 +411,7 @@ export async function tryAutoRunMcpTool(input: {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown MCP error.";
+    console.error(`[qa:mcp:execute] ✗ Tool execution failed: ${message}`);
     return {
       used: false,
       moduleKey: selectedTool.module.moduleKey,

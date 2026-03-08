@@ -22,25 +22,32 @@ export class McpConnectionManager {
    */
   registerModule(module: McpModule): void {
     if (!module.isEnabled) {
+      console.log(`[MCP:ConnectionManager] Skipping disabled module: ${module.moduleKey}`);
       return;
     }
 
+    console.log(`[MCP:ConnectionManager] Registering module: ${module.moduleKey} (${module.transport})`);
+
     // 如果已存在，先断开
     if (this.clients.has(module.moduleKey)) {
+      console.log(`[MCP:ConnectionManager] Module ${module.moduleKey} already exists, disconnecting first`);
       void this.disconnectModule(module.moduleKey);
     }
 
     const client = McpClientFactory.createClient(module);
     this.clients.set(module.moduleKey, client);
+    console.log(`[MCP:ConnectionManager] ✓ Module ${module.moduleKey} registered`);
   }
 
   /**
    * 注册多个模块
    */
   registerModules(modules: McpModule[]): void {
+    console.log(`[MCP:ConnectionManager] Registering ${modules.length} modules: ${modules.map(m => m.moduleKey).join(', ')}`);
     for (const module of modules) {
       this.registerModule(module);
     }
+    console.log(`[MCP:ConnectionManager] Registration complete. Registered clients: ${Array.from(this.clients.keys()).join(', ')}`);
   }
 
   /**
@@ -119,17 +126,27 @@ export class McpConnectionManager {
     // 检查缓存
     const cached = this.toolCache.get(moduleKey);
     if (cached && cached.expiresAt > Date.now()) {
+      console.log(`[MCP:ConnectionManager] Using cached tools for ${moduleKey} (${cached.tools.length} tools)`);
       return cached.tools;
     }
 
     const client = this.clients.get(moduleKey);
     if (!client) {
+      console.error(`[MCP:ConnectionManager] Module not registered: ${moduleKey}`);
       throw new Error(`Module not registered: ${moduleKey}`);
     }
 
     // 确保已连接
     if (!client.isConnected()) {
-      await client.connect();
+      console.log(`[MCP:ConnectionManager] Client ${moduleKey} not connected, connecting...`);
+      // 添加连接超时，防止挂起
+      const connectTimeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Connection timeout for ${moduleKey}`)), 30000);
+      });
+      await Promise.race([client.connect(), connectTimeout]);
+      console.log(`[MCP:ConnectionManager] Client ${moduleKey} connected successfully`);
+    } else {
+      console.log(`[MCP:ConnectionManager] Client ${moduleKey} already connected`);
     }
 
     // 获取工具列表
@@ -163,16 +180,27 @@ export class McpConnectionManager {
     toolName: string,
     args: Record<string, unknown>
   ): Promise<ReturnType<McpBaseClient["callTool"]>> {
+    console.log(`[MCP:ConnectionManager] Calling tool ${moduleKey}::${toolName} with args:`, JSON.stringify(args).slice(0, 200));
+    
     const client = this.clients.get(moduleKey);
     if (!client) {
+      console.error(`[MCP:ConnectionManager] Module not registered: ${moduleKey}`);
       throw new Error(`Module not registered: ${moduleKey}`);
     }
 
     if (!client.isConnected()) {
+      console.log(`[MCP:ConnectionManager] Reconnecting ${moduleKey} before calling tool`);
       await client.connect();
     }
 
-    return client.callTool(toolName, args);
+    try {
+      const result = await client.callTool(toolName, args);
+      console.log(`[MCP:ConnectionManager] ✓ Tool ${moduleKey}::${toolName} executed successfully`);
+      return result;
+    } catch (error) {
+      console.error(`[MCP:ConnectionManager] ✗ Tool ${moduleKey}::${toolName} execution failed:`, error);
+      throw error;
+    }
   }
 
   /**

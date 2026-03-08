@@ -127,6 +127,8 @@ export async function runQaSkillStream(
   },
   handlers: QaSkillRuntimeHandlers = {},
 ): Promise<QaSkillStreamResult> {
+  console.log(`[qa:skill] runQaSkillStream called: mode=${input.mode}, skillId=${input.skillId || 'none'}, attachments=${input.attachmentFileNames?.length || 0}`);
+  
   const requestedSkillId = (input.skillId || DEFAULT_QA_SKILL_ID).trim() || DEFAULT_QA_SKILL_ID;
   let selectedOption = getQaSkillOption(DEFAULT_QA_SKILL_ID);
   let selectedRule: QaSkillRuntimeRule | undefined;
@@ -149,14 +151,21 @@ export async function runQaSkillStream(
     }
   }
 
+  console.log(`[qa:skill] Selected skill: ${selectedOption.id} (${selectedOption.label}), effectiveMode=${selectedRule?.modeOverride || input.mode}`);
+
   const skillMeta = createSkillMeta(selectedOption);
   const effectiveMode = selectedRule?.modeOverride || input.mode;
+  
+  console.log(`[qa:skill] Calling MCP with effectiveMode=${effectiveMode}...`);
   const mcpExecution = await tryAutoRunQaMcpTool({
     messages: input.messages,
     mode: effectiveMode,
     signal: handlers.signal,
     attachmentFileNames: input.attachmentFileNames,
   });
+  
+  console.log(`[qa:skill] MCP result: used=${mcpExecution.used}, module=${mcpExecution.moduleKey || 'none'}, tool=${mcpExecution.toolName || 'none'}, error=${mcpExecution.error || 'none'}`);
+  
   const messagesWithMcp = mcpExecution.contextMessage
     ? [...input.messages, mcpExecution.contextMessage]
     : input.messages;

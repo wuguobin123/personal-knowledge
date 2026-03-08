@@ -67,14 +67,18 @@ export abstract class McpBaseClient {
   async listTools(cursor?: string): Promise<{ tools: McpTool[]; nextCursor?: string }> {
     this.ensureConnected();
     
+    console.log(`[MCP:${this.module.moduleKey}] Listing tools...`);
     const response = await this.client!.listTools(cursor ? { cursor } : undefined);
     
     // 过滤白名单
     let tools = response.tools || [];
+    const beforeFilter = tools.length;
     if (this.module.toolAllowlist.length > 0) {
       tools = tools.filter(tool => this.module.toolAllowlist.includes(tool.name));
+      console.log(`[MCP:${this.module.moduleKey}] Filtered by allowlist: ${beforeFilter} -> ${tools.length} tools`);
     }
 
+    console.log(`[MCP:${this.module.moduleKey}] Listed ${tools.length} tools`);
     return {
       tools: tools.map(tool => ({
         name: tool.name,
@@ -91,10 +95,12 @@ export abstract class McpBaseClient {
   async callTool(name: string, args: Record<string, unknown>): Promise<McpToolResult> {
     this.ensureConnected();
 
+    console.log(`[MCP:${this.module.moduleKey}] Calling tool: ${name}`);
     const result = await this.client!.callTool({
       name,
       arguments: args,
     }, undefined, { timeout: this.options.timeoutMs });
+    console.log(`[MCP:${this.module.moduleKey}] Tool ${name} returned`);
 
     const contentItems = result.content as Array<{
       type: string;
@@ -130,6 +136,7 @@ export abstract class McpBaseClient {
    */
   protected ensureConnected(): void {
     if (!this.isConnected()) {
+      console.error(`[MCP:${this.module.moduleKey}] Client not connected! Current state: ${this.state.status}`);
       throw new Error(`MCP client not connected: ${this.module.moduleKey}`);
     }
   }

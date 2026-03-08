@@ -251,7 +251,10 @@ export async function listQaMcpModules(input: { enabledOnly?: boolean } = {}) {
 }
 
 export async function listEnabledQaMcpModules() {
-  return listQaMcpModules({ enabledOnly: true });
+  console.log(`[qa:mcp-modules] Fetching enabled MCP modules from DB...`);
+  const modules = await listQaMcpModules({ enabledOnly: true });
+  console.log(`[qa:mcp-modules] Found ${modules.length} enabled modules: ${modules.map(m => m.moduleKey).join(', ') || '(none)'}`);
+  return modules;
 }
 
 export async function createQaMcpModule(input: {

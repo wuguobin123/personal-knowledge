@@ -11,19 +11,23 @@ export class McpHttpClient extends McpBaseClient {
 
   async connect(): Promise<void> {
     if (this.isConnected()) {
+      console.log(`[MCP:${this.module.moduleKey}] HTTP already connected`);
       return;
     }
 
+    console.log(`[MCP:${this.module.moduleKey}] HTTP connecting to ${this.module.endpointUrl}...`);
     this.updateState({ status: "connecting" });
 
     try {
-      // 创建 HTTP 传输
-      this.transport = new StreamableHTTPClientTransport(
-        new URL(this.module.endpointUrl)
-      );
+      // 创建 HTTP 传输 - 注意：StreamableHTTPClientTransport 可能需要特殊处理
+      const url = new URL(this.module.endpointUrl);
+      console.log(`[MCP:${this.module.moduleKey}] Creating StreamableHTTPClientTransport for ${url.toString()}`);
+      
+      this.transport = new StreamableHTTPClientTransport(url);
 
       // 创建客户端
       this.client = this.createClient();
+      console.log(`[MCP:${this.module.moduleKey}] Client created, calling connect()...`);
 
       // 建立连接
       await this.client.connect(this.transport);
@@ -35,11 +39,16 @@ export class McpHttpClient extends McpBaseClient {
         error: undefined,
       });
 
-      console.log(`[MCP:${this.module.moduleKey}] HTTP client connected`);
+      console.log(`[MCP:${this.module.moduleKey}] ✓ HTTP client connected`);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[MCP:${this.module.moduleKey}] ✗ HTTP connection failed: ${message}`);
+      if (error instanceof Error && error.stack) {
+        console.error(`[MCP:${this.module.moduleKey}] Stack: ${error.stack}`);
+      }
       this.updateState({ 
         status: "error", 
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
         retryCount: this.state.retryCount + 1,
       });
       throw error;

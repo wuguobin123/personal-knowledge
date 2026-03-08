@@ -576,22 +576,11 @@ export async function runQaMultiAgentStream(
 
   const decision = parsePlannerDecision(plannerRaw, input.mode);
   let references: QaReference[] = [];
-  let streamMessages: SiliconFlowMessage[] = [];
-
-  if (decision.route === "domain") {
-    const { contextText, references: articleReferences } = await loadArticleContext(latestUser.content);
-    references = articleReferences;
-    streamMessages = buildDomainStreamMessages({
-      conversation,
-      question: latestUser.content,
-      context: contextText || "No article context found.",
-    });
-  } else {
-    streamMessages = buildGeneralStreamMessages({
-      conversation,
-      question: latestUser.content,
-    });
-  }
+  // 问答模块不引用博客文章作为上下文，统一走 general 分支
+  const streamMessages = buildGeneralStreamMessages({
+    conversation,
+    question: latestUser.content,
+  });
 
   handlers.onMeta?.({
     route: decision.route,
@@ -639,25 +628,13 @@ export async function runQaMultiAgent(input: {
   });
 
   const decision = parsePlannerDecision(plannerRaw, input.mode);
-  let references: QaReference[] = [];
-  let draft = "";
-
-  if (decision.route === "domain") {
-    const { contextText, references: articleReferences } = await loadArticleContext(latestUser.content);
-    references = articleReferences;
-    const domainChain = domainPrompt.pipe(llmResponder).pipe(parser);
-    draft = await domainChain.invoke({
-      conversation,
-      question: latestUser.content,
-      context: contextText || "No article context found.",
-    });
-  } else {
-    const generalChain = generalPrompt.pipe(llmResponder).pipe(parser);
-    draft = await generalChain.invoke({
-      conversation,
-      question: latestUser.content,
-    });
-  }
+  const references: QaReference[] = [];
+  // 问答模块不引用博客文章作为上下文，统一走 general 分支
+  const generalChain = generalPrompt.pipe(llmResponder).pipe(parser);
+  const draft = await generalChain.invoke({
+    conversation,
+    question: latestUser.content,
+  });
 
   const reviewerChain = reviewerPrompt.pipe(llmReviewer).pipe(parser);
   const reviewed = await reviewerChain.invoke({

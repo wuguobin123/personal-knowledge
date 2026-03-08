@@ -442,6 +442,8 @@ export async function POST(request: Request) {
         }
 
         try {
+          console.log(`[qa:api] Starting runQaSkillStream: session=${conversationId}, mode=${parsed.data.mode}, skill=${parsed.data.skillId}`);
+          
           const result = await runQaSkillStream(
             {
               mode: parsed.data.mode,
@@ -455,6 +457,7 @@ export async function POST(request: Request) {
             {
               signal: request.signal,
               onMeta(meta) {
+                console.log(`[qa:api] Meta received: skill=${meta.skillId}, mcpUsed=${meta.mcpUsed}, mcpModule=${meta.mcpModuleKey || 'none'}`);
                 push("meta", meta);
               },
               onThinkingDelta(text) {
@@ -465,6 +468,8 @@ export async function POST(request: Request) {
               },
             },
           );
+
+          console.log(`[qa:api] runQaSkillStream completed: mcpUsed=${result.mcpUsed}, mcpModule=${result.mcpModuleKey || 'none'}, mcpTool=${result.mcpToolName || 'none'}`);
 
           const normalizedAssistant = normalizeAssistantCompletion({
             answer: result.answer,

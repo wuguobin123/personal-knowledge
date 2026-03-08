@@ -447,9 +447,16 @@ async function chooseToolWithLlm(input: {
   const attachmentHint =
     input.attachmentFileNames && input.attachmentFileNames.length > 0
       ? [
-          "IMPORTANT: The user has attached the following file(s) for this question:",
-          input.attachmentFileNames.join(", "),
-          "You MUST prefer calling a tool that can read or analyze Excel, CSV or tabular data if such a tool is available.",
+          "===== ATTACHED FILES =====",
+          `Files: ${input.attachmentFileNames.join(", ")}`,
+          "",
+          "CRITICAL INSTRUCTIONS:",
+          "1. The user has uploaded file(s) that need to be analyzed.",
+          "2. You MUST use 'action: use_tool' to call a tool that can process these files.",
+          "3. Look for tools that mention: Excel, CSV, spreadsheet, table, file analysis, or data processing.",
+          "4. If you see ANY tool that can handle files/spreadsheets, you MUST select it.",
+          "5. NEVER skip when files are attached - always try to use an appropriate tool.",
+          "==========================",
         ].join("\n")
       : "";
 
@@ -475,11 +482,20 @@ async function chooseToolWithLlm(input: {
   const systemParts = [
     "You are an MCP tool router for a Q&A assistant.",
     "Decide whether to call exactly one tool.",
-    "Only call a tool when external execution is clearly useful.",
   ];
   if (attachmentHint) {
     systemParts.push(
-      "When the user has attached files, you MUST prefer action=use_tool for a tool that reads/analyzes Excel, CSV or tabular data if available.",
+      "",
+      "FILE ATTACHMENT POLICY:",
+      "- When files are attached, you are REQUIRED to use 'action: use_tool'",
+      "- Find and select a tool capable of processing the attached file type",
+      "- For Excel/CSV files, select tools related to spreadsheet/data analysis",
+      "- Skipping (action: skip) is NOT allowed when files are attached",
+      "",
+    );
+  } else {
+    systemParts.push(
+      "Only call a tool when external execution is clearly useful.",
     );
   }
   // 直接使用字面量花括号（不再经过 ChatPromptTemplate，避免 "Single '}' in template"）

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "calculator": {
+      "command": "node",
+      "args": [
+        "ABSOLUTE_PATH_TO_PROJECT/src/mcp/calculator-server.mjs"
+      ],
+      "env": {}
+    }
+  }
+}

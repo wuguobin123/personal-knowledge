@@ -13,6 +13,7 @@
 - 支持图片上传（本地 / 阿里云 OSS）
 - 内置 AI 新闻定时抓取（每天早上 7 点，入库待审核）
 - Q&A 助手支持 MCP 模块注册与自动工具调用（HTTP MCP）
+- 内置 MCP Calculator Server（符合业界标准，支持 Claude Desktop、Cursor、Cline 等客户端）
 - 内置种子文章数据
 
 ## 1. 本地开发（不使用 Docker）
@@ -349,3 +350,157 @@ curl -b /tmp/pk_admin.cookie \
 
 抓取流程会把新闻标题和摘要统一改写成中文；当 GitHub 项目星标高于阈值时，摘要会优先说明项目具体用途与解决问题。
 新闻源会优先抓取最新 AI 热点，包含 Hacker News（最新+热榜）与 36 氪 AI 频道。
+
+## 10. MCP Calculator Server
+
+本项目内置一个符合 [Model Context Protocol](https://modelcontextprotocol.io/) 业界标准的计算器服务器，支持在各种 MCP 客户端中使用。
+
+### 特性
+
+- ✅ 符合 MCP 2025-03-26 规范
+- ✅ 支持 Claude Desktop、Cursor、Cline、Kimi Code 等主流客户端
+- ✅ 提供 12 个数学计算工具（加减乘除、幂运算、平方根、阶乘等）
+
+### 快速测试
+
+```bash
+# 直接运行服务器
+npm run mcp:calculator
+
+# 或使用 MCP Inspector 测试
+npx @modelcontextprotocol/inspector node src/mcp/calculator-server.mjs
+```
+
+### 客户端配置
+
+#### Claude Desktop
+
+编辑 `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) 或 `%APPDATA%/Claude/claude_desktop_config.json` (Windows)：
+
+```json
+{
+  "mcpServers": {
+    "calculator": {
+      "command": "node",
+      "args": ["/absolute/path/to/personal-knowledge/src/mcp/calculator-server.mjs"]
+    }
+  }
+}
+```
+
+#### Cursor
+
+编辑 `~/.cursor/mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "calculator": {
+      "command": "node",
+      "args": ["/absolute/path/to/personal-knowledge/src/mcp/calculator-server.mjs"]
+    }
+  }
+}
+```
+
+#### Cline
+
+在 VS Code Cline 设置中添加：
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "calculator",
+      "transport": "stdio",
+      "command": "node",
+      "args": ["/absolute/path/to/personal-knowledge/src/mcp/calculator-server.mjs"]
+    }
+  ]
+}
+```
+
+更多配置方式请参考 [`mcp-config/README.md`](./mcp-config/README.md)。
+
+### 在项目 QA 助手中使用
+
+```bash
+# 添加计算器 MCP 模块到数据库
+npm run mcp:calculator:add
+```
+
+添加后，在后台 QA 助手页面即可使用计算器功能。
+
+### 可用工具
+
+| 工具 | 描述 |
+|------|------|
+| `add` | 加法 |
+| `subtract` | 减法 |
+| `multiply` | 乘法 |
+| `divide` | 除法 |
+| `power` | 幂运算 |
+| `sqrt` | 平方根 |
+| `factorial` | 阶乘 |
+| `modulo` | 取模 |
+| `absolute` | 绝对值 |
+| `round` | 四舍五入 |
+| `get_pi` | 获取 π |
+| `get_e` | 获取 e |
+
+### HTTP 方式对外暴露
+
+除了 stdio 方式，还支持以 HTTP 方式对外暴露：
+
+```bash
+# 启动 HTTP 服务器（默认端口 3001）
+npm run mcp:calculator:http
+
+# 添加到项目 QA 助手（HTTP 方式）
+npm run mcp:calculator:add:http
+```
+
+HTTP API 调用示例：
+```bash
+curl -X POST http://localhost:3001/call \
+  -H "Content-Type: application/json" \
+  -d '{"tool": "add", "params": {"a": 10, "b": 20}}'
+# 返回: {"success": true, "result": {"result": 30}}
+```
+
+详细文档：
+- [🌐 HTTP 部署指南](./MCP-HTTP-SETUP.md) - HTTP 方式完整配置
+
+### 详细文档
+
+- [🚀 5分钟快速开始](./MCP-QUICK-START.md) - 最简配置步骤
+- [📖 完整配置指南](./MCP-CLIENT-SETUP.md) - 详细配置说明和故障排除
+- [✅ 配置检查清单](./MCP-SETUP-CHECKLIST.md) - 逐项检查确保配置正确
+- [🌐 HTTP 部署指南](./MCP-HTTP-SETUP.md) - HTTP 方式完整配置
+- [Calculator Server 实现文档](./src/mcp/README-Calculator.md) - 服务器架构和工具说明
+- [客户端配置模板](./mcp-config/README.md) - 各客户端配置模板
+
+### 常用命令
+
+```bash
+# 运行 Calculator Server (stdio)
+npm run mcp:calculator
+
+# 运行 Calculator Server (HTTP)
+npm run mcp:calculator:http
+
+# 添加到项目 QA 助手 (stdio)
+npm run mcp:calculator:add
+
+# 添加到项目 QA 助手 (HTTP)
+npm run mcp:calculator:add:http
+
+# 查看已注册的 MCP 模块
+npm run mcp:list
+
+# 诊断 MCP 模块问题
+npm run mcp:diagnose
+
+# 使用 MCP Inspector 测试
+npx @modelcontextprotocol/inspector node src/mcp/calculator-server.mjs
+```

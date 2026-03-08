@@ -15,7 +15,7 @@ interface ToolCacheEntry {
 export class McpConnectionManager {
   private clients = new Map<string, McpBaseClient>();
   private toolCache = new Map<string, ToolCacheEntry>();
-  private readonly toolCacheTtlMs = 60 * 1000; // 1分钟缓存
+  private readonly toolCacheTtlMs = 5 * 60 * 1000; // 5分钟缓存，减少频繁重连
 
   /**
    * 注册模块（不立即连接）
@@ -136,15 +136,48 @@ export class McpConnectionManager {
       throw new Error(`Module not registered: ${moduleKey}`);
     }
 
-    // 确保已连接
+    // 确保已连接（带重试）
     if (!client.isConnected()) {
       console.log(`[MCP:ConnectionManager] Client ${moduleKey} not connected, connecting...`);
-      // 添加连接超时，防止挂起
-      const connectTimeout = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error(`Connection timeout for ${moduleKey}`)), 30000);
-      });
-      await Promise.race([client.connect(), connectTimeout]);
-      console.log(`[MCP:ConnectionManager] Client ${moduleKey} connected successfully`);
+      
+      // 重试配置
+      const maxRetries = 2;
+      let lastError: Error | null = null;
+      
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        if (attempt > 0) {
+          console.log(`[MCP:ConnectionManager] Retry attempt ${attempt}/${maxRetries} for ${moduleKey}...`);
+          // 指数退避
+          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+        }
+        
+        try {
+          // 添加连接超时，防止挂起（STDIO连接可能需要更长时间，特别是首次启动时）
+          const connectTimeout = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error(`Connection timeout for ${moduleKey}`)), 60000);
+          });
+          await Promise.race([client.connect(), connectTimeout]);
+          console.log(`[MCP:ConnectionManager] Client ${moduleKey} connected successfully`);
+          lastError = null;
+          break; // 连接成功，跳出重试循环
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          console.error(`[MCP:ConnectionManager] Connection attempt ${attempt + 1} failed for ${moduleKey}: ${lastError.message}`);
+          
+          // 重置客户端状态以便下次重试
+          if (attempt < maxRetries) {
+            try {
+              await client.disconnect();
+            } catch {
+              // 忽略断开时的错误
+            }
+          }
+        }
+      }
+      
+      if (lastError) {
+        throw new Error(`Failed to connect to ${moduleKey} after ${maxRetries + 1} attempts: ${lastError.message}`);
+      }
     } else {
       console.log(`[MCP:ConnectionManager] Client ${moduleKey} already connected`);
     }

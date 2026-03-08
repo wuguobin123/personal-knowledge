@@ -21,6 +21,7 @@ export class McpStdioClient extends McpBaseClient {
       return;
     }
 
+    const startTime = Date.now();
     console.log(`[MCP:${this.module.moduleKey}] STDIO connecting...`);
     this.updateState({ status: "connecting" });
 
@@ -31,6 +32,7 @@ export class McpStdioClient extends McpBaseClient {
       }
 
       console.log(`[MCP:${this.module.moduleKey}] STDIO config: command=${config.command}, args=[${config.args.join(', ')}], cwd=${config.cwd || '(default)'}`);
+      console.log(`[MCP:${this.module.moduleKey}] STDIO starting process... This may take a while for first-time startup`);
 
       // 创建 STDIO 传输
       this.transport = new StdioClientTransport({
@@ -43,9 +45,22 @@ export class McpStdioClient extends McpBaseClient {
       // 创建客户端
       this.client = this.createClient();
 
-      // 建立连接
-      console.log(`[MCP:${this.module.moduleKey}] STDIO establishing connection...`);
-      await this.client.connect(this.transport);
+      // 建立连接（使用更长的超时）
+      console.log(`[MCP:${this.module.moduleKey}] STDIO establishing MCP connection...`);
+      const connectStartTime = Date.now();
+      
+      // 包装连接过程，添加进度日志
+      const connectPromise = this.client.connect(this.transport);
+      const progressInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - connectStartTime) / 1000);
+        console.log(`[MCP:${this.module.moduleKey}] STDIO still connecting... (${elapsed}s elapsed)`);
+      }, 10000); // 每10秒报告一次进度
+      
+      await connectPromise;
+      clearInterval(progressInterval);
+      
+      const totalTime = Date.now() - startTime;
+      console.log(`[MCP:${this.module.moduleKey}] ✓ STDIO client connected in ${totalTime}ms`);
 
       this.updateState({ 
         status: "connected", 
@@ -53,11 +68,19 @@ export class McpStdioClient extends McpBaseClient {
         retryCount: 0,
         error: undefined,
       });
-
-      console.log(`[MCP:${this.module.moduleKey}] ✓ STDIO client connected`);
     } catch (error) {
+      const totalTime = Date.now() - startTime;
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[MCP:${this.module.moduleKey}] ✗ STDIO connection failed: ${message}`);
+      console.error(`[MCP:${this.module.moduleKey}] ✗ STDIO connection failed after ${totalTime}ms: ${message}`);
+      
+      // 提供更详细的错误信息
+      if (message.includes("timeout") || message.includes("ETIMEDOUT")) {
+        console.error(`[MCP:${this.module.moduleKey}] The STDIO server took too long to start. Consider:`);
+        console.error(`  1. Checking if the command path is correct`);
+        console.error(`  2. Verifying the server binary exists and is executable`);
+        console.error(`  3. Checking server dependencies are installed`);
+      }
+      
       this.updateState({ 
         status: "error", 
         error: message,

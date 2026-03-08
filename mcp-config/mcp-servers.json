@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "calculator": {
+      "name": "Calculator MCP Server",
+      "description": "A standard MCP calculator server providing basic arithmetic operations",
+      "transport": "stdio",
+      "command": "node",
+      "args": [
+        "ABSOLUTE_PATH_TO_PROJECT/src/mcp/calculator-server.mjs"
+      ],
+      "env": {},
+      "enabled": true
+    }
+  }
+}

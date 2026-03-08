@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { McpModule, McpTool, McpToolResult, McpConnectionState, McpClientOptions } from "../types";
 
 export const DEFAULT_MCP_OPTIONS: McpClientOptions = {
-  timeoutMs: 25000,
+  timeoutMs: 60000, // 增加到60秒，给STDIO启动和复杂操作更多时间
   maxRetries: 3,
   autoConnect: true,
 };

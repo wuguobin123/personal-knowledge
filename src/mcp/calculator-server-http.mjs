@@ -148,6 +148,22 @@ server.tool("get_e", "Get Euler's number (e)", {}, async () => ({
   isError: false
 }));
 
+// 供 tools/list 返回的元数据（与上面注册的工具一致，便于 Streamable HTTP 对外暴露）
+const TOOLS_LIST_META = [
+  { name: "add", description: "Add two numbers together (a + b)", inputSchema: { type: "object", properties: { a: { type: "number" }, b: { type: "number" } }, required: ["a", "b"] } },
+  { name: "subtract", description: "Subtract two numbers (a - b)", inputSchema: { type: "object", properties: { a: { type: "number" }, b: { type: "number" } }, required: ["a", "b"] } },
+  { name: "multiply", description: "Multiply two numbers (a × b)", inputSchema: { type: "object", properties: { a: { type: "number" }, b: { type: "number" } }, required: ["a", "b"] } },
+  { name: "divide", description: "Divide two numbers (a ÷ b)", inputSchema: { type: "object", properties: { a: { type: "number" }, b: { type: "number" } }, required: ["a", "b"] } },
+  { name: "power", description: "Calculate power (base^exponent)", inputSchema: { type: "object", properties: { base: { type: "number" }, exponent: { type: "number" } }, required: ["base", "exponent"] } },
+  { name: "sqrt", description: "Calculate square root (√x)", inputSchema: { type: "object", properties: { number: { type: "number" } }, required: ["number"] } },
+  { name: "factorial", description: "Calculate factorial (n!)", inputSchema: { type: "object", properties: { n: { type: "integer" } }, required: ["n"] } },
+  { name: "modulo", description: "Calculate modulo (a % b)", inputSchema: { type: "object", properties: { a: { type: "number" }, b: { type: "number" } }, required: ["a", "b"] } },
+  { name: "absolute", description: "Calculate absolute value (|x|)", inputSchema: { type: "object", properties: { number: { type: "number" } }, required: ["number"] } },
+  { name: "round", description: "Round to decimal places", inputSchema: { type: "object", properties: { number: { type: "number" }, decimals: { type: "integer" } }, required: ["number"] } },
+  { name: "get_pi", description: "Get the value of Pi (π)", inputSchema: { type: "object", properties: {} } },
+  { name: "get_e", description: "Get Euler's number (e)", inputSchema: { type: "object", properties: {} } },
+];
+
 // ============ HTTP 服务器 ============
 
 async function startHttpServer() {
@@ -215,30 +231,51 @@ async function startHttpServer() {
     
     app.post("/mcp", async (req, res) => {
       try {
-        // 这里简化处理，实际应根据 MCP Streamable HTTP 规范实现
-        // 需要处理 session 管理、流控等
-        const { method, params, id } = req.body;
+        const { method, params = {}, id } = req.body || {};
         
-        // 调用工具
+        if (method === "initialize") {
+          res.json({
+            jsonrpc: "2.0",
+            id,
+            result: {
+              protocolVersion: "2024-11-05",
+              capabilities: { tools: {} },
+              serverInfo: { name: SERVER_CONFIG.name, version: SERVER_CONFIG.version }
+            }
+          });
+          return;
+        }
+        
+        if (method === "tools/list") {
+          res.json({
+            jsonrpc: "2.0",
+            id,
+            result: { tools: TOOLS_LIST_META }
+          });
+          return;
+        }
+        
         if (method === "tools/call") {
-          const result = await server.callTool(params.name, params.arguments);
+          const result = await server.callTool(params.name, params.arguments ?? {});
           res.json({
             jsonrpc: "2.0",
             id,
             result
           });
-        } else {
-          res.status(400).json({
-            jsonrpc: "2.0",
-            id,
-            error: { code: -32601, message: "Method not found" }
-          });
+          return;
         }
+        
+        res.status(400).json({
+          jsonrpc: "2.0",
+          id,
+          error: { code: -32601, message: "Method not found" }
+        });
       } catch (error) {
         console.error("Error handling request:", error);
         res.status(500).json({
           jsonrpc: "2.0",
-          error: { code: -32603, message: error.message }
+          id: req.body?.id ?? null,
+          error: { code: -32603, message: error?.message ?? "Internal error" }
         });
       }
     });

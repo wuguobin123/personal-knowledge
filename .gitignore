@@ -24,6 +24,7 @@
 # misc
 .DS_Store
 *.pem
+.claude/
 
 # debug
 npm-debug.log*
@@ -47,3 +48,4 @@ next-env.d.ts
 /src/generated/prisma
 /public/uploads
 /storage/qa-files
+/storage/mysql-local

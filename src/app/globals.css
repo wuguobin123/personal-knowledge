@@ -3264,6 +3264,191 @@ p {
   box-shadow: 0 12px 24px rgba(22, 103, 191, 0.34);
 }
 
+.admin-twitter-sync {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.admin-twitter-sync-feedback {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #8fb0d0;
+  text-align: right;
+}
+
+.admin-twitter-sync-feedback.is-error {
+  color: #ff8f8f;
+}
+
+.admin-twitter-watch {
+  margin-bottom: 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(30, 58, 85, 0.9);
+  background: linear-gradient(180deg, rgba(11, 30, 50, 0.92), rgba(8, 23, 40, 0.92));
+  padding: 20px;
+}
+
+.admin-twitter-watch-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-twitter-watch-head h3 {
+  margin: 0 0 6px;
+  font-size: 1.08rem;
+  color: #e6f0fb;
+}
+
+.admin-twitter-watch-head p {
+  margin: 0;
+  color: #86a3c0;
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.admin-twitter-watch-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(460px, 100%);
+}
+
+.admin-twitter-watch-form input {
+  flex: 1 1 auto;
+  height: 46px;
+  border-radius: 10px;
+  border: 1px solid rgba(33, 65, 97, 0.92);
+  background: rgba(10, 28, 47, 0.9);
+  color: #dfebf8;
+  padding: 0 14px;
+  font: inherit;
+}
+
+.admin-twitter-watch-form button {
+  height: 46px;
+  border-radius: 10px;
+  border: 1px solid rgba(33, 123, 210, 0.9);
+  background: linear-gradient(180deg, #2a8ee6, #1d79d6);
+  box-shadow: 0 12px 24px rgba(22, 103, 191, 0.34);
+  color: #ffffff;
+  padding: 0 18px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-twitter-watch-form input:disabled,
+.admin-twitter-watch-form button:disabled,
+.admin-twitter-watch-actions button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.admin-twitter-watch-feedback {
+  margin: 12px 0 0;
+  color: #8fb0d0;
+  font-size: 0.9rem;
+}
+
+.admin-twitter-watch-feedback.is-error {
+  color: #ff8f8f;
+}
+
+.admin-twitter-watch-table-shell {
+  margin-top: 18px;
+  overflow-x: auto;
+}
+
+.admin-twitter-watch-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-twitter-watch-table th,
+.admin-twitter-watch-table td {
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(24, 48, 72, 0.82);
+  text-align: left;
+}
+
+.admin-twitter-watch-table th {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #7994b0;
+}
+
+.admin-twitter-watch-table td {
+  color: #b8cbe0;
+  font-size: 0.98rem;
+}
+
+.admin-twitter-watch-user {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-twitter-watch-user strong {
+  color: #edf5ff;
+}
+
+.admin-twitter-watch-user span {
+  color: #7e99b5;
+  font-size: 0.84rem;
+}
+
+.admin-twitter-watch-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  height: 32px;
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.admin-twitter-watch-badge.is-enabled {
+  background: rgba(41, 163, 106, 0.18);
+  color: #93efc0;
+  border: 1px solid rgba(41, 163, 106, 0.36);
+}
+
+.admin-twitter-watch-badge.is-disabled {
+  background: rgba(162, 89, 89, 0.14);
+  color: #ffb0b0;
+  border: 1px solid rgba(162, 89, 89, 0.3);
+}
+
+.admin-twitter-watch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-twitter-watch-actions button {
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid rgba(33, 65, 97, 0.92);
+  background: rgba(10, 28, 47, 0.9);
+  color: #b6c9dd;
+  padding: 0 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-twitter-watch-actions button.is-danger {
+  border-color: rgba(175, 84, 84, 0.45);
+  color: #ffb0b0;
+}
+
 .admin-dash-table-shell {
   border-radius: 14px;
   border: 1px solid rgba(30, 58, 85, 0.9);
@@ -3709,6 +3894,20 @@ p {
   .admin-dash-controls {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .admin-twitter-watch-head {
+    flex-direction: column;
+  }
+
+  .admin-twitter-watch-form {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-twitter-watch-actions {
+    justify-content: flex-start;
   }
 
   .admin-dash-actions {

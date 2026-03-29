@@ -115,7 +115,7 @@ NGINX_IMAGE=docker.1ms.run/library/nginx:1.21-alpine
 
 - `http://服务器IP`（默认 Nginx 映射 `80` 端口）
 
-AI 新闻抓取调度器（`scheduler` 服务）会在部署后随 compose 一起启动，默认每天 `07:00`（`AI_NEWS_TIMEZONE` 时区）抓取并入库。
+调度器（`scheduler` 服务）会在部署后随 compose 一起启动，默认每天 `06:50`（`TWITTER_TIMEZONE` 时区）同步 Twitter 推文、每天 `07:00`（`AI_NEWS_TIMEZONE` 时区）抓取 AI 新闻并入库。
 
 如果需要在首次部署时写入种子数据：
 
@@ -351,7 +351,71 @@ curl -b /tmp/pk_admin.cookie \
 抓取流程会把新闻标题和摘要统一改写成中文；当 GitHub 项目星标高于阈值时，摘要会优先说明项目具体用途与解决问题。
 新闻源会优先抓取最新 AI 热点，包含 Hacker News（最新+热榜）与 36 氪 AI 频道。
 
-## 10. MCP Calculator Server
+## 10. Twitter 每日同步
+
+手动执行一次抓取：
+
+```bash
+npm run twitter:collect
+```
+
+本地启动 Twitter 调度器（默认每天 `06:50` 执行）：
+
+```bash
+npm run twitter:scheduler
+```
+
+本地同时启动 AI 新闻和 Twitter 调度器：
+
+```bash
+npm run scheduler
+```
+
+手动触发接口（需管理员登录态）：
+
+```bash
+# 1) 登录并保存 cookie
+curl -i -c /tmp/pk_admin.cookie \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"你的后台密码"}' \
+  http://127.0.0.1:3000/api/auth/login
+
+# 2) 按后台已配置的账号名单触发一次抓取
+curl -b /tmp/pk_admin.cookie -X POST \
+  http://127.0.0.1:3000/api/admin/twitter/collect
+
+# 3) 临时指定账号/时区触发（用于回归测试，不会覆盖后台配置）
+curl -b /tmp/pk_admin.cookie -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"usernames":["karpathy","sama"],"timeZone":"Asia/Shanghai"}' \
+  http://127.0.0.1:3000/api/admin/twitter/collect
+
+# 4) 查看是否仍在执行
+curl -b /tmp/pk_admin.cookie \
+  http://127.0.0.1:3000/api/admin/twitter/collect
+```
+
+可用环境变量（可选）：
+
+- `SOCIALDATA_API_KEY`：SocialData API Key
+- `TWITTER_MONITOR_USERNAMES`：可选的初始账号名单，逗号分隔；首次引导或 CLI 临时测试时使用，正式运行后推荐在后台 `Twitter` 页面管理
+- `TWITTER_TIMEZONE`：默认 `Asia/Shanghai`
+- `TWITTER_RUN_AT`：默认 `06:50`
+- `TWITTER_RUN_ON_START`：默认 `false`
+- `TWITTER_CHECK_INTERVAL_SECONDS`：默认 `60`
+- `TWITTER_RETRY_COOLDOWN_SECONDS`：默认 `900`
+- `TWITTER_FETCH_TIMEOUT_MS`：默认 `15000`
+- `TWITTER_MAX_PAGES_PER_ACCOUNT`：默认 `3`
+- `TWITTER_INITIAL_LOOKBACK_DAYS`：首次同步时的回看天数，默认 `2`
+- `TWITTER_TRANSLATE_TIMEOUT_MS`：翻译请求超时（毫秒），默认 `45000`
+- `TWITTER_TRANSLATE_BATCH_SIZE`：每批翻译条数，默认 `8`
+- `TWITTER_INCLUDE_REPLIES`：默认 `false`
+- `TWITTER_INCLUDE_RETWEETS`：默认 `false`
+
+同步结果会写入后台 `Twitter` 标签页，优先展示中文译文，同时保留原文内容与原始推文链接，并保存原始 API payload 供排查。
+后台 `Twitter` 页面同时支持新增、停用、删除监控账号；修改后无需重新部署，下一次手动或定时同步会直接按数据库里的启用账号执行。
+
+## 11. MCP Calculator Server
 
 本项目内置一个符合 [Model Context Protocol](https://modelcontextprotocol.io/) 业界标准的计算器服务器，支持在各种 MCP 客户端中使用。
 

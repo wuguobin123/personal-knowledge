@@ -53,6 +53,54 @@ model AiNewsItem {
   @@index([source, externalId])
 }
 
+model TwitterWatchAccount {
+  id                  Int       @id @default(autoincrement())
+  username            String    @unique @db.VarChar(50)
+  userIdStr           String?   @unique @db.VarChar(50)
+  lastSinceId         String?   @db.VarChar(50)
+  enabled             Boolean   @default(true)
+  includeReplies      Boolean   @default(false)
+  includeRetweets     Boolean   @default(false)
+  lastSyncedAt        DateTime?
+  lastProfileSyncedAt DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  posts               TwitterPost[]
+
+  @@index([enabled, username])
+}
+
+model TwitterPost {
+  id             Int                  @id @default(autoincrement())
+  tweetIdStr     String               @unique @db.VarChar(50)
+  watchAccountId Int?
+  userIdStr      String               @db.VarChar(50)
+  username       String               @db.VarChar(50)
+  fullText       String?              @db.LongText
+  translatedText String?              @db.LongText
+  translationModel String?            @db.VarChar(160)
+  url            String               @db.VarChar(500)
+  lang           String?              @db.VarChar(20)
+  conversationId String?              @db.VarChar(50)
+  tweetCreatedAt DateTime
+  fetchedAt      DateTime             @default(now())
+  translatedAt   DateTime?
+  replyCount     Int?
+  retweetCount   Int?
+  favoriteCount  Int?
+  quoteCount     Int?
+  bookmarkCount  Int?
+  viewsCount     Int?
+  raw            Json?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  watchAccount   TwitterWatchAccount? @relation(fields: [watchAccountId], references: [id], onDelete: SetNull)
+
+  @@index([tweetCreatedAt])
+  @@index([username, tweetCreatedAt])
+  @@index([watchAccountId, tweetCreatedAt])
+}
+
 model QaSkill {
   id          Int           @id @default(autoincrement())
   skillKey    String        @unique @db.VarChar(120)

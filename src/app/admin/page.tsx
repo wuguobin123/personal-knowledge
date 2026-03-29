@@ -3,16 +3,18 @@ import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import AdminEditor from "./admin-editor";
 import QaAssistant from "./qa-assistant";
+import TwitterSyncButton from "./twitter-sync-button";
+import TwitterWatchAccountManager from "./twitter-watch-account-manager";
 import { ADMIN_SESSION_COOKIE, getAdminSession, shouldUseSecureCookies } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams: Promise<{ view?: string; newsId?: string; page?: string }>;
+  searchParams: Promise<{ view?: string; newsId?: string; tweetId?: string; page?: string }>;
 };
 
-type AdminView = "list" | "write" | "qa" | "ainews" | "settings";
+type AdminView = "list" | "write" | "qa" | "ainews" | "tweets" | "twitter-accounts" | "settings";
 
 type ArticleRow = {
   id: number;
@@ -60,6 +62,55 @@ type AiNewsRawRow = {
   raw?: unknown;
 };
 
+type TwitterRow = {
+  id: number;
+  tweetIdStr: string;
+  username: string;
+  fullText: string | null;
+  translatedText: string | null;
+  translationModel: string | null;
+  url: string;
+  tweetCreatedAt: Date;
+  fetchedAt: Date;
+  translatedAt: Date | null;
+  favoriteCount: number | null;
+  retweetCount: number | null;
+  replyCount: number | null;
+  viewsCount: number | null;
+};
+
+type TwitterDetail = TwitterRow & {
+  userIdStr: string;
+  lang: string | null;
+  conversationId: string | null;
+  quoteCount: number | null;
+  bookmarkCount: number | null;
+  raw: unknown;
+};
+
+type TwitterRawRow = {
+  id: number;
+  tweetIdStr: string;
+  userIdStr: string;
+  username: string;
+  fullText: string | null;
+  translatedText?: string | null;
+  translationModel?: string | null;
+  url: string;
+  lang?: string | null;
+  conversationId?: string | null;
+  tweetCreatedAt: Date | string;
+  fetchedAt: Date | string;
+  translatedAt?: Date | string | null;
+  replyCount?: number | string | null;
+  retweetCount?: number | string | null;
+  favoriteCount?: number | string | null;
+  quoteCount?: number | string | null;
+  bookmarkCount?: number | string | null;
+  viewsCount?: number | string | null;
+  raw?: unknown;
+};
+
 const TABLE_IMAGES = [
   "https://images.unsplash.com/photo-1677442135703-1787eea5ce01?auto=format&fit=crop&w=400&q=80",
   "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=400&q=80",
@@ -69,6 +120,7 @@ const TABLE_IMAGES = [
 ];
 
 const AI_NEWS_PAGE_SIZE = 10;
+const TWITTER_PAGE_SIZE = 15;
 const ARTICLE_PAGE_SIZE = 4;
 
 function formatDate(date: Date) {
@@ -193,6 +245,37 @@ function normalizeAiNewsDetail(row: AiNewsRawRow): AiNewsDetail {
   };
 }
 
+function normalizeTwitterRow(row: TwitterRawRow): TwitterRow {
+  return {
+    id: row.id,
+    tweetIdStr: row.tweetIdStr,
+    username: row.username,
+    fullText: row.fullText ?? null,
+    translatedText: row.translatedText ?? null,
+    translationModel: row.translationModel ?? null,
+    url: row.url,
+    tweetCreatedAt: toDate(row.tweetCreatedAt),
+    fetchedAt: toDate(row.fetchedAt),
+    translatedAt: row.translatedAt ? toDate(row.translatedAt) : null,
+    favoriteCount: row.favoriteCount == null ? null : toNumber(row.favoriteCount),
+    retweetCount: row.retweetCount == null ? null : toNumber(row.retweetCount),
+    replyCount: row.replyCount == null ? null : toNumber(row.replyCount),
+    viewsCount: row.viewsCount == null ? null : toNumber(row.viewsCount),
+  };
+}
+
+function normalizeTwitterDetail(row: TwitterRawRow): TwitterDetail {
+  return {
+    ...normalizeTwitterRow(row),
+    userIdStr: row.userIdStr,
+    lang: row.lang ?? null,
+    conversationId: row.conversationId ?? null,
+    quoteCount: row.quoteCount == null ? null : toNumber(row.quoteCount),
+    bookmarkCount: row.bookmarkCount == null ? null : toNumber(row.bookmarkCount),
+    raw: row.raw ?? null,
+  };
+}
+
 function buildAiNewsHref(page: number, newsId?: number) {
   const params = new URLSearchParams({
     view: "ainews",
@@ -202,6 +285,21 @@ function buildAiNewsHref(page: number, newsId?: number) {
     params.set("newsId", String(newsId));
   }
   return `/admin?${params.toString()}`;
+}
+
+function buildTwitterHref(page: number, tweetId?: number) {
+  const params = new URLSearchParams({
+    view: "tweets",
+    page: String(page),
+  });
+  if (tweetId != null) {
+    params.set("tweetId", String(tweetId));
+  }
+  return `/admin?${params.toString()}`;
+}
+
+function buildTwitterAccountsHref() {
+  return "/admin?view=twitter-accounts";
 }
 
 function buildArticleListHref(page: number) {
@@ -235,7 +333,15 @@ function buildPageNumbers(current: number, total: number) {
 }
 
 function normalizeView(view?: string): AdminView {
-  if (view === "write" || view === "qa" || view === "settings" || view === "list" || view === "ainews") {
+  if (
+    view === "write" ||
+    view === "qa" ||
+    view === "settings" ||
+    view === "list" ||
+    view === "ainews" ||
+    view === "tweets" ||
+    view === "twitter-accounts"
+  ) {
     return view;
   }
   return "list";
@@ -245,6 +351,8 @@ function viewLabel(view: AdminView) {
   if (view === "write") return "Write Post";
   if (view === "qa") return "Q&A Assistant";
   if (view === "ainews") return "AI News";
+  if (view === "tweets") return "Twitter";
+  if (view === "twitter-accounts") return "Twitter Accounts";
   if (view === "settings") return "Settings";
   return "Blog List";
 }
@@ -273,10 +381,12 @@ export default async function AdminPage({ searchParams }: Props) {
     redirect("/admin/login");
   }
 
-  const { view: viewParam, newsId: newsIdParam, page: pageParam } = await searchParams;
+  const { view: viewParam, newsId: newsIdParam, tweetId: tweetIdParam, page: pageParam } = await searchParams;
   const view = normalizeView(viewParam);
   const selectedNewsId = view === "ainews" ? parsePositiveInt(newsIdParam) : null;
+  const selectedTweetId = view === "tweets" ? parsePositiveInt(tweetIdParam) : null;
   const requestedAiNewsPage = view === "ainews" ? parsePositiveInt(pageParam) ?? 1 : 1;
+  const requestedTwitterPage = view === "tweets" ? parsePositiveInt(pageParam) ?? 1 : 1;
   const requestedArticlePage = view === "list" ? parsePositiveInt(pageParam) ?? 1 : 1;
 
   let articles: ArticleRow[] = [];
@@ -289,6 +399,11 @@ export default async function AdminPage({ searchParams }: Props) {
   let aiNewsPage = requestedAiNewsPage;
   let aiNewsTotalPages = 1;
   let selectedNews: AiNewsDetail | null = null;
+  let tweets: TwitterRow[] = [];
+  let twitterTotalCount = 0;
+  let twitterPage = requestedTwitterPage;
+  let twitterTotalPages = 1;
+  let selectedTweet: TwitterDetail | null = null;
 
   if (view === "list") {
     [articleTotalCount, publishedCount] = await Promise.all([
@@ -414,6 +529,113 @@ export default async function AdminPage({ searchParams }: Props) {
       selectedNews = detailRows.length > 0 ? normalizeAiNewsDetail(detailRows[0]) : null;
     }
   }
+  if (view === "tweets") {
+    const twitterPostDelegate = (
+      prisma as unknown as {
+        twitterPost?: {
+          findMany: (args: unknown) => Promise<TwitterRawRow[]>;
+          count: (args: unknown) => Promise<number>;
+          findFirst: (args: unknown) => Promise<TwitterRawRow | null>;
+        };
+      }
+    ).twitterPost;
+
+    if (twitterPostDelegate) {
+      const [total, detail] = await Promise.all([
+        twitterPostDelegate.count({}),
+        selectedTweetId == null
+          ? Promise.resolve(null)
+          : twitterPostDelegate.findFirst({
+              where: { id: selectedTweetId },
+              select: {
+                id: true,
+                tweetIdStr: true,
+                userIdStr: true,
+                username: true,
+                fullText: true,
+                translatedText: true,
+                translationModel: true,
+                url: true,
+                lang: true,
+                conversationId: true,
+                tweetCreatedAt: true,
+                fetchedAt: true,
+                translatedAt: true,
+                replyCount: true,
+                retweetCount: true,
+                favoriteCount: true,
+                quoteCount: true,
+                bookmarkCount: true,
+                viewsCount: true,
+                raw: true,
+              },
+            }),
+      ]);
+
+      twitterTotalCount = total;
+      twitterTotalPages = Math.max(1, Math.ceil(twitterTotalCount / TWITTER_PAGE_SIZE));
+      twitterPage = Math.min(requestedTwitterPage, twitterTotalPages);
+      const twitterOffset = (twitterPage - 1) * TWITTER_PAGE_SIZE;
+      const rows = await twitterPostDelegate.findMany({
+        orderBy: [{ tweetCreatedAt: "desc" }, { id: "desc" }],
+        skip: twitterOffset,
+        take: TWITTER_PAGE_SIZE,
+        select: {
+          id: true,
+          tweetIdStr: true,
+          username: true,
+          fullText: true,
+          translatedText: true,
+          translationModel: true,
+          url: true,
+          tweetCreatedAt: true,
+          fetchedAt: true,
+          translatedAt: true,
+          favoriteCount: true,
+          retweetCount: true,
+          replyCount: true,
+          viewsCount: true,
+        },
+      });
+
+      tweets = rows.map(normalizeTwitterRow);
+      selectedTweet = detail ? normalizeTwitterDetail(detail) : null;
+    } else {
+      const [totalRows, detailRows] = await Promise.all([
+        prisma.$queryRaw<Array<{ total: number | string | bigint }>>`
+          SELECT COUNT(*) AS total
+          FROM TwitterPost
+        `,
+        selectedTweetId == null
+          ? Promise.resolve([] as TwitterRawRow[])
+          : prisma.$queryRaw<TwitterRawRow[]>`
+              SELECT
+                id, tweetIdStr, userIdStr, username, fullText, translatedText, translationModel, url, lang, conversationId,
+                tweetCreatedAt, fetchedAt, translatedAt, replyCount, retweetCount, favoriteCount,
+                quoteCount, bookmarkCount, viewsCount, raw
+              FROM TwitterPost
+              WHERE id = ${selectedTweetId}
+              LIMIT 1
+            `,
+      ]);
+
+      twitterTotalCount = toNumber(totalRows[0]?.total);
+      twitterTotalPages = Math.max(1, Math.ceil(twitterTotalCount / TWITTER_PAGE_SIZE));
+      twitterPage = Math.min(requestedTwitterPage, twitterTotalPages);
+      const twitterOffset = (twitterPage - 1) * TWITTER_PAGE_SIZE;
+      const rows = await prisma.$queryRaw<TwitterRawRow[]>`
+        SELECT
+          id, tweetIdStr, username, fullText, translatedText, translationModel, url, tweetCreatedAt, fetchedAt, translatedAt,
+          favoriteCount, retweetCount, replyCount, viewsCount
+        FROM TwitterPost
+        ORDER BY tweetCreatedAt DESC, id DESC
+        LIMIT ${TWITTER_PAGE_SIZE} OFFSET ${twitterOffset}
+      `;
+
+      tweets = rows.map(normalizeTwitterRow);
+      selectedTweet = detailRows.length > 0 ? normalizeTwitterDetail(detailRows[0]) : null;
+    }
+  }
 
   const articleRows = articles;
   const aiNewsRows = aiNews;
@@ -425,6 +647,11 @@ export default async function AdminPage({ searchParams }: Props) {
   const aiNewsShownStart = aiNewsTotalCount > 0 ? aiNewsOffset + 1 : 0;
   const aiNewsShownEnd = aiNewsTotalCount > 0 ? Math.min(aiNewsOffset + aiNewsRows.length, aiNewsTotalCount) : 0;
   const aiNewsPageNumbers = buildPageNumbers(aiNewsPage, aiNewsTotalPages);
+  const twitterRows = tweets;
+  const twitterOffset = (twitterPage - 1) * TWITTER_PAGE_SIZE;
+  const twitterShownStart = twitterTotalCount > 0 ? twitterOffset + 1 : 0;
+  const twitterShownEnd = twitterTotalCount > 0 ? Math.min(twitterOffset + twitterRows.length, twitterTotalCount) : 0;
+  const twitterPageNumbers = buildPageNumbers(twitterPage, twitterTotalPages);
   const draftCount = Math.max(0, articleTotalCount - publishedCount);
   const totalPageViews = articleTotalCount * 3121 + 7000;
   const activeComments = Math.max(0, publishedCount * 29 - 16);
@@ -446,6 +673,15 @@ export default async function AdminPage({ searchParams }: Props) {
           </Link>
           <Link href="/admin?view=ainews" className={view === "ainews" ? "is-active" : undefined}>
             AI News
+          </Link>
+          <Link href="/admin?view=tweets" className={view === "tweets" ? "is-active" : undefined}>
+            Twitter
+          </Link>
+          <Link
+            href={buildTwitterAccountsHref()}
+            className={view === "twitter-accounts" ? "is-active" : undefined}
+          >
+            Twitter Accounts
           </Link>
           <Link href="/admin?view=qa" className={view === "qa" ? "is-active" : undefined}>
             Q&amp;A Assistant
@@ -496,6 +732,10 @@ export default async function AdminPage({ searchParams }: Props) {
                     ? "Content Management"
                     : view === "ainews"
                       ? "AI News Records"
+                      : view === "tweets"
+                        ? "Daily Twitter Feed"
+                      : view === "twitter-accounts"
+                        ? "Twitter Watch Accounts"
                       : "Workspace Settings"}
                 </h2>
               </div>
@@ -799,6 +1039,222 @@ export default async function AdminPage({ searchParams }: Props) {
                     </article>
                   </section>
                 ) : null}
+              </>
+            ) : view === "tweets" ? (
+              <>
+                <section className="admin-dash-controls">
+                  <div className="admin-dash-search">
+                    <span>T</span>
+                    <input value="Daily sync runs at 06:50. Use the button to trigger a manual refresh." readOnly />
+                  </div>
+                  <div className="admin-dash-actions">
+                    <Link href={buildTwitterAccountsHref()}>Manage Accounts</Link>
+                    <TwitterSyncButton />
+                  </div>
+                </section>
+
+                <section className="admin-dash-table-shell">
+                  <table className="admin-dash-table">
+                    <thead>
+                      <tr>
+                        <th>Tweet</th>
+                        <th>Account</th>
+                        <th>Posted At</th>
+                        <th>Fetched At</th>
+                        <th>Metrics</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {twitterRows.length > 0 ? (
+                        twitterRows.map((item) => (
+                          <tr key={item.id}>
+                            <td>
+                              <div className="admin-dash-title-cell">
+                                <img src={imageForSeed(`${item.username}-${item.id}`)} alt={item.username} />
+                                <span>{item.translatedText?.trim() || item.fullText?.trim() || "(No text content)"}</span>
+                              </div>
+                            </td>
+                            <td>@{item.username}</td>
+                            <td>{formatDateTime(item.tweetCreatedAt)}</td>
+                            <td>{formatDateTime(item.fetchedAt)}</td>
+                            <td>
+                              R {item.replyCount ?? 0} / RT {item.retweetCount ?? 0} / L {item.favoriteCount ?? 0}
+                            </td>
+                            <td>
+                              <div className="admin-dash-row-actions">
+                                <Link href={buildTwitterHref(twitterPage, item.id)}>View</Link>
+                                <a href={item.url} target="_blank" rel="noreferrer">
+                                  Open
+                                </a>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="admin-dash-empty">
+                            No Twitter records found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+
+                  <div className="admin-dash-pagination">
+                    <p>
+                      Showing <strong>{twitterShownStart}</strong> to{" "}
+                      <strong>{twitterShownEnd}</strong> of <strong>{twitterTotalCount}</strong> results
+                    </p>
+                    <div>
+                      {twitterPage > 1 ? (
+                        <Link href={buildTwitterHref(twitterPage - 1)}>{"<"}</Link>
+                      ) : (
+                        <span className="is-disabled">{"<"}</span>
+                      )}
+                      {twitterPageNumbers.map((pageNumber, index) =>
+                        pageNumber < 0 ? (
+                          <span key={`ellipsis-${index}`} className="is-disabled">
+                            ...
+                          </span>
+                        ) : (
+                          <Link
+                            key={pageNumber}
+                            href={buildTwitterHref(pageNumber)}
+                            className={pageNumber === twitterPage ? "is-active" : undefined}
+                          >
+                            {pageNumber}
+                          </Link>
+                        ),
+                      )}
+                      {twitterPage < twitterTotalPages ? (
+                        <Link href={buildTwitterHref(twitterPage + 1)}>{">"}</Link>
+                      ) : (
+                        <span className="is-disabled">{">"}</span>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                {selectedTweet ? (
+                  <section className="admin-ainews-modal" role="dialog" aria-modal="true">
+                    <Link
+                      href={buildTwitterHref(twitterPage)}
+                      className="admin-ainews-modal-backdrop"
+                      aria-label="Close preview"
+                    />
+                    <article className="admin-ainews-detail admin-ainews-detail-modal">
+                      <header className="admin-ainews-detail-head">
+                        <div>
+                          <h3>@{selectedTweet.username}</h3>
+                          <p>Tweet #{selectedTweet.tweetIdStr}</p>
+                        </div>
+                        <div>
+                          <Link href={buildTwitterHref(twitterPage)}>Close</Link>
+                          <a href={selectedTweet.url} target="_blank" rel="noreferrer">
+                            Open Tweet
+                          </a>
+                        </div>
+                      </header>
+
+                      <p className="admin-ainews-summary">
+                        {selectedTweet.translatedText?.trim() || selectedTweet.fullText?.trim() || "No text content in this tweet."}
+                      </p>
+
+                      <dl className="admin-ainews-meta">
+                        <div>
+                          <dt>Account</dt>
+                          <dd>@{selectedTweet.username}</dd>
+                        </div>
+                        <div>
+                          <dt>User ID</dt>
+                          <dd>{selectedTweet.userIdStr}</dd>
+                        </div>
+                        <div>
+                          <dt>Posted At</dt>
+                          <dd>{formatDateTime(selectedTweet.tweetCreatedAt)}</dd>
+                        </div>
+                        <div>
+                          <dt>Fetched At</dt>
+                          <dd>{formatDateTime(selectedTweet.fetchedAt)}</dd>
+                        </div>
+                        <div>
+                          <dt>Translated At</dt>
+                          <dd>{selectedTweet.translatedAt ? formatDateTime(selectedTweet.translatedAt) : "-"}</dd>
+                        </div>
+                        <div>
+                          <dt>Translation Model</dt>
+                          <dd>{selectedTweet.translationModel ?? "-"}</dd>
+                        </div>
+                        <div>
+                          <dt>Replies</dt>
+                          <dd>{selectedTweet.replyCount ?? 0}</dd>
+                        </div>
+                        <div>
+                          <dt>Retweets</dt>
+                          <dd>{selectedTweet.retweetCount ?? 0}</dd>
+                        </div>
+                        <div>
+                          <dt>Likes</dt>
+                          <dd>{selectedTweet.favoriteCount ?? 0}</dd>
+                        </div>
+                        <div>
+                          <dt>Quotes</dt>
+                          <dd>{selectedTweet.quoteCount ?? 0}</dd>
+                        </div>
+                        <div>
+                          <dt>Bookmarks</dt>
+                          <dd>{selectedTweet.bookmarkCount ?? 0}</dd>
+                        </div>
+                        <div>
+                          <dt>Views</dt>
+                          <dd>{selectedTweet.viewsCount ?? 0}</dd>
+                        </div>
+                        <div>
+                          <dt>Language</dt>
+                          <dd>{selectedTweet.lang ?? "-"}</dd>
+                        </div>
+                        <div>
+                          <dt>Conversation ID</dt>
+                          <dd>{selectedTweet.conversationId ?? "-"}</dd>
+                        </div>
+                      </dl>
+
+                      <div className="admin-ainews-raw">
+                        <h4>Original Text</h4>
+                        <pre>{selectedTweet.fullText?.trim() || "-"}</pre>
+                      </div>
+
+                      <div className="admin-ainews-raw">
+                        <h4>Raw Payload</h4>
+                        <pre>{formatJson(selectedTweet.raw)}</pre>
+                      </div>
+                    </article>
+                  </section>
+                ) : selectedTweetId != null ? (
+                  <section className="admin-dash-placeholder">
+                    <article>
+                      <h3>Tweet Not Found</h3>
+                      <p>The selected tweet does not exist or has not been synced yet.</p>
+                      <Link href={buildTwitterHref(twitterPage)}>Back to twitter list</Link>
+                    </article>
+                  </section>
+                ) : null}
+              </>
+            ) : view === "twitter-accounts" ? (
+              <>
+                <section className="admin-dash-controls">
+                  <div className="admin-dash-search">
+                    <span>A</span>
+                    <input value="Manage your Twitter watch accounts here. Changes apply to the next sync immediately." readOnly />
+                  </div>
+                  <div className="admin-dash-actions">
+                    <Link href={buildTwitterHref(1)}>Back to Feed</Link>
+                    <TwitterSyncButton />
+                  </div>
+                </section>
+
+                <TwitterWatchAccountManager />
               </>
             ) : (
               <section className="admin-dash-placeholder">

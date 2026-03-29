@@ -34,9 +34,9 @@ yarn-error.log*
 
 # env files - ignore secrets, allow examples only
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
+!.env.*.example
 
 # vercel
 .vercel
